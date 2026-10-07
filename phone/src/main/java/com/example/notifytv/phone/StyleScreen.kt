@@ -62,8 +62,8 @@ private val SWATCHES = listOf(
     0x6A1B9A, 0xAD1457, 0xC62828, 0xEF6C00, 0xF9A825, 0xFFFFFF
 )
 
-private const val SHORT_TEXT = "See you at 8!"
-private const val LONG_TEXT = "Hey! Are we still on for tonight? I'll bring snacks and the new board game everyone keeps talking about."
+private const val SHORT_SAMPLE = "On my way!"
+private const val LONG_SAMPLE = "Hey! Are we still on for tonight? I'll bring snacks and the new board game everyone keeps talking about."
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
@@ -72,7 +72,7 @@ fun StyleScreen(style: NotifStyle, onChange: (NotifStyle) -> Unit, onBack: () ->
     val snackbar = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
     var replay by remember { mutableIntStateOf(0) }
-    var longSample by remember { mutableStateOf(false) }
+    var longSample by remember { mutableStateOf(true) }
 
     Scaffold(
         topBar = {
@@ -95,21 +95,21 @@ fun StyleScreen(style: NotifStyle, onChange: (NotifStyle) -> Unit, onBack: () ->
             TvPreview(
                 style = style,
                 replay = replay,
-                longSample = longSample,
+                body = if (longSample) LONG_SAMPLE else SHORT_SAMPLE,
                 onCorner = { onChange(style.copy(corner = it)) },
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
             )
             Row(
-                Modifier.fillMaxWidth().padding(horizontal = 16.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                Modifier.padding(horizontal = 16.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Text("Preview:", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text("Preview:", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 FilterChip(selected = !longSample, onClick = { longSample = false }, label = { Text("Short message") })
                 FilterChip(selected = longSample, onClick = { longSample = true }, label = { Text("Long message") })
             }
             Text(
-                "Tap a corner of the TV to move the notification. ▶ replays the animation, ➤ sends a test to the TV.",
+                "Tap a corner of the TV to move the notification. \u25b6 replays the animation, \u27a4 sends a test to the TV.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(horizontal = 20.dp)
@@ -131,17 +131,14 @@ fun StyleScreen(style: NotifStyle, onChange: (NotifStyle) -> Unit, onBack: () ->
 
                 Section("Size & position") {
                     SwitchRow("Automatic width", style.autoWidth) { onChange(style.copy(autoWidth = it)) }
-                    AnimatedVisibility(style.autoWidth) {
-                        Text(
-                            "Fits the text, up to the maximum width. Longer text wraps onto new lines.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(bottom = 4.dp)
-                        )
-                    }
-                    SliderRow(if (style.autoWidth) "Maximum width" else "Width", style.widthDp, 200..800, step = 10, unit = " dp") {
-                        onChange(style.copy(widthDp = it))
-                    }
+                    Text(
+                        if (style.autoWidth) "The notification is as wide as its text and grows up to the maximum width. Longer text continues on new lines."
+                        else "Every notification has the same width.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(bottom = 4.dp)
+                    )
+                    SliderRow(if (style.autoWidth) "Maximum width" else "Width", style.widthDp, 200..800, step = 10, unit = " dp") { onChange(style.copy(widthDp = it)) }
                     SwitchRow("Automatic height", style.heightDp == 0) { auto -> onChange(style.copy(heightDp = if (auto) 0 else 120)) }
                     AnimatedVisibility(style.heightDp > 0) {
                         SliderRow("Height", style.heightDp.coerceAtLeast(60), 60..400, step = 5, unit = " dp") { onChange(style.copy(heightDp = it)) }
@@ -157,7 +154,7 @@ fun StyleScreen(style: NotifStyle, onChange: (NotifStyle) -> Unit, onBack: () ->
                     }
                     SliderRow("Title size", style.titleSp, 10..40, unit = " sp") { onChange(style.copy(titleSp = it)) }
                     SliderRow("Message size", style.textSp, 8..36, unit = " sp") { onChange(style.copy(textSp = it)) }
-                    SliderRow("Max message lines", style.bodyLines, 1..10) { onChange(style.copy(bodyLines = it)) }
+                    SliderRow("Max message lines", style.bodyLines, 1..12) { onChange(style.copy(bodyLines = it)) }
                 }
 
                 Section("Icon") {
@@ -207,7 +204,7 @@ private fun Swatch(rgb: Int, selected: Boolean, onClick: () -> Unit) {
 }
 
 @Composable
-fun TvPreview(style: NotifStyle, replay: Int, longSample: Boolean, onCorner: (Corner) -> Unit, modifier: Modifier = Modifier) {
+fun TvPreview(style: NotifStyle, replay: Int, body: String, onCorner: (Corner) -> Unit, modifier: Modifier = Modifier) {
     val progress = remember { Animatable(1f) }
     LaunchedEffect(replay, style.anim) {
         progress.snapTo(0f)
@@ -253,7 +250,7 @@ fun TvPreview(style: NotifStyle, replay: Int, longSample: Boolean, onCorner: (Co
         val isRight = style.corner.isRight
 
         PreviewCard(
-            style, scale, if (longSample) LONG_TEXT else SHORT_TEXT,
+            style, scale, body,
             Modifier.align(align).padding((style.marginDp * scale).dp).graphicsLayer {
                 val p = progress.value
                 when (style.anim) {

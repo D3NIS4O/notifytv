@@ -14,13 +14,13 @@ enum class Anim(val label: String) { SLIDE("Slide"), DROP("Drop"), FADE("Fade"),
 data class NotifStyle(
     val corner: Corner = Corner.TOP_RIGHT,
     val durationSec: Int = 6,
-    val widthDp: Int = 420,
     val autoWidth: Boolean = true,
+    val widthDp: Int = 420,
     val heightDp: Int = 0,
     val appNameSp: Int = 12,
     val titleSp: Int = 16,
     val textSp: Int = 14,
-    val bodyLines: Int = 3,
+    val bodyLines: Int = 4,
     val iconDp: Int = 40,
     val radiusDp: Int = 16,
     val marginDp: Int = 32,
@@ -39,8 +39,8 @@ data class NotifStyle(
     fun toJson(): JSONObject = JSONObject()
         .put("corner", corner.name)
         .put("durationSec", durationSec)
-        .put("widthDp", widthDp)
         .put("autoWidth", autoWidth)
+        .put("widthDp", widthDp)
         .put("heightDp", heightDp)
         .put("appNameSp", appNameSp)
         .put("titleSp", titleSp)
@@ -64,8 +64,8 @@ data class NotifStyle(
             return NotifStyle(
                 corner = runCatching { Corner.valueOf(j.optString("corner")) }.getOrDefault(d.corner),
                 durationSec = j.optInt("durationSec", d.durationSec),
-                widthDp = j.optInt("widthDp", d.widthDp),
                 autoWidth = j.optBoolean("autoWidth", d.autoWidth),
+                widthDp = j.optInt("widthDp", d.widthDp),
                 heightDp = j.optInt("heightDp", d.heightDp),
                 appNameSp = j.optInt("appNameSp", d.appNameSp),
                 titleSp = j.optInt("titleSp", d.titleSp),

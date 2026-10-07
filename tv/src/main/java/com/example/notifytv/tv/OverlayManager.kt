@@ -14,6 +14,7 @@ import android.util.Base64
 import android.util.TypedValue
 import android.view.Gravity
 import android.view.View
+import android.view.View.MeasureSpec
 import android.view.ViewGroup
 import android.view.WindowManager
 import android.view.animation.AccelerateInterpolator
@@ -26,21 +27,6 @@ import android.widget.TextView
 import androidx.core.view.doOnPreDraw
 import org.json.JSONObject
 
-/** LinearLayout that wraps its content but never grows wider than [maxPx] (0 = no limit). */
-private class MaxWidthLinearLayout(ctx: Context, private val maxPx: Int) : LinearLayout(ctx) {
-    override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
-        var spec = widthMeasureSpec
-        if (maxPx > 0) {
-            val size = MeasureSpec.getSize(widthMeasureSpec)
-            val mode = MeasureSpec.getMode(widthMeasureSpec)
-            if (mode == MeasureSpec.UNSPECIFIED || size > maxPx) {
-                spec = MeasureSpec.makeMeasureSpec(maxPx, MeasureSpec.AT_MOST)
-            }
-        }
-        super.onMeasure(spec, heightMeasureSpec)
-    }
-}
-
 class OverlayManager(private val ctx: Context) {
     companion object {
         private const val MAX_PER_CORNER = 4
@@ -49,13 +35,13 @@ class OverlayManager(private val ctx: Context) {
     private class Style(j: JSONObject) {
         val corner: String = j.optString("corner", "TOP_RIGHT")
         val durationMs: Long = j.optLong("durationMs", 6000)
-        val width: Int = j.optInt("widthDp", 420)
         val autoWidth: Boolean = j.optBoolean("autoWidth", true)
+        val width: Int = j.optInt("widthDp", 420)
         val height: Int = j.optInt("heightDp", 0)
         val appNameSp: Float = j.optInt("appNameSp", 12).toFloat()
         val titleSp: Float = j.optInt("titleSp", 16).toFloat()
         val textSp: Float = j.optInt("textSp", 14).toFloat()
-        val bodyLines: Int = j.optInt("bodyLines", 3)
+        val bodyLines: Int = j.optInt("bodyLines", 4)
         val iconDp: Int = j.optInt("iconDp", 40)
         val radiusDp: Int = j.optInt("radiusDp", 16)
         val marginDp: Int = j.optInt("marginDp", 32)
@@ -67,6 +53,20 @@ class OverlayManager(private val ctx: Context) {
         val animMs: Long = j.optLong("animMs", 350)
         val isTop: Boolean = corner.startsWith("TOP")
         val isRight: Boolean = corner.endsWith("RIGHT")
+    }
+
+    /** A LinearLayout that never measures wider than [maxW] pixels. */
+    private class MaxWidthLinearLayout(ctx: Context, private val maxW: Int) : LinearLayout(ctx) {
+        override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
+            val mode = MeasureSpec.getMode(widthMeasureSpec)
+            val size = MeasureSpec.getSize(widthMeasureSpec)
+            val spec = when (mode) {
+                MeasureSpec.EXACTLY -> widthMeasureSpec
+                MeasureSpec.AT_MOST -> MeasureSpec.makeMeasureSpec(minOf(size, maxW), MeasureSpec.AT_MOST)
+                else -> MeasureSpec.makeMeasureSpec(maxW, MeasureSpec.AT_MOST)
+            }
+            super.onMeasure(spec, heightMeasureSpec)
+        }
     }
 
     private val wm = ctx.getSystemService(WindowManager::class.java)
@@ -232,7 +232,7 @@ class OverlayManager(private val ctx: Context) {
         }
 
     private fun buildCard(j: JSONObject, s: Style): View {
-        val card = MaxWidthLinearLayout(ctx, if (s.autoWidth) dp(s.width) else 0).apply {
+        val card = MaxWidthLinearLayout(ctx, dp(s.width)).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
             setPadding(dp(16), dp(14), dp(16), dp(14))
@@ -258,8 +258,12 @@ class OverlayManager(private val ctx: Context) {
         col.addView(text(j.optString("title"), s.titleSp, s.fg, bold = true, lines = 2))
         val body = j.optString("text")
         if (body.isNotEmpty()) col.addView(text(body, s.textSp, s.fg, lines = s.bodyLines))
-        val colWidth = if (s.autoWidth) ViewGroup.LayoutParams.WRAP_CONTENT else ViewGroup.LayoutParams.MATCH_PARENT
-        card.addView(col, LinearLayout.LayoutParams(colWidth, ViewGroup.LayoutParams.WRAP_CONTENT))
+        val colLp = if (s.autoWidth) {
+            LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+        } else {
+            LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
+        }
+        card.addView(col, colLp)
         return card
     }
 }
