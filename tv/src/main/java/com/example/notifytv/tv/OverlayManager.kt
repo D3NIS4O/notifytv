@@ -254,6 +254,7 @@ class OverlayManager(private val ctx: Context) {
                 val iv = ImageView(ctx).apply { setImageBitmap(bmp) }
                 val lp = LinearLayout.LayoutParams(dp(s.iconDp), dp(s.iconDp))
                 lp.marginEnd = dp(14)
+                lp.gravity = Gravity.TOP // app logo sits in the top-left corner of the popup
                 card.addView(iv, lp)
             }
         }

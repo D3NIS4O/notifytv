@@ -305,7 +305,7 @@ private fun PreviewCard(style: NotifStyle, scale: Float, body: String, modifier:
         if (style.showIcon) {
             Image(
                 painterResource(R.drawable.ic_app), null,
-                Modifier.size((style.iconDp * scale).dp).clip(RoundedCornerShape((style.iconDp * scale / 4).dp))
+                Modifier.align(Alignment.Top).size((style.iconDp * scale).dp).clip(RoundedCornerShape((style.iconDp * scale / 4).dp))
             )
             Spacer(Modifier.width((14 * scale).dp))
         }
