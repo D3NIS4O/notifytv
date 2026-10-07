@@ -14,7 +14,8 @@ enum class Anim(val label: String) { SLIDE("Slide"), DROP("Drop"), FADE("Fade"),
 data class NotifStyle(
     val corner: Corner = Corner.TOP_RIGHT,
     val durationSec: Int = 6,
-    val widthDp: Int = 380,
+    val widthDp: Int = 420,
+    val autoWidth: Boolean = true,
     val heightDp: Int = 0,
     val appNameSp: Int = 12,
     val titleSp: Int = 16,
@@ -39,6 +40,7 @@ data class NotifStyle(
         .put("corner", corner.name)
         .put("durationSec", durationSec)
         .put("widthDp", widthDp)
+        .put("autoWidth", autoWidth)
         .put("heightDp", heightDp)
         .put("appNameSp", appNameSp)
         .put("titleSp", titleSp)
@@ -63,6 +65,7 @@ data class NotifStyle(
                 corner = runCatching { Corner.valueOf(j.optString("corner")) }.getOrDefault(d.corner),
                 durationSec = j.optInt("durationSec", d.durationSec),
                 widthDp = j.optInt("widthDp", d.widthDp),
+                autoWidth = j.optBoolean("autoWidth", d.autoWidth),
                 heightDp = j.optInt("heightDp", d.heightDp),
                 appNameSp = j.optInt("appNameSp", d.appNameSp),
                 titleSp = j.optInt("titleSp", d.titleSp),

@@ -35,6 +35,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
@@ -61,6 +62,9 @@ private val SWATCHES = listOf(
     0x6A1B9A, 0xAD1457, 0xC62828, 0xEF6C00, 0xF9A825, 0xFFFFFF
 )
 
+private const val SHORT_TEXT = "See you at 8!"
+private const val LONG_TEXT = "Hey! Are we still on for tonight? I'll bring snacks and the new board game everyone keeps talking about."
+
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun StyleScreen(style: NotifStyle, onChange: (NotifStyle) -> Unit, onBack: () -> Unit) {
@@ -68,6 +72,7 @@ fun StyleScreen(style: NotifStyle, onChange: (NotifStyle) -> Unit, onBack: () ->
     val snackbar = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
     var replay by remember { mutableIntStateOf(0) }
+    var longSample by remember { mutableStateOf(false) }
 
     Scaffold(
         topBar = {
@@ -90,9 +95,19 @@ fun StyleScreen(style: NotifStyle, onChange: (NotifStyle) -> Unit, onBack: () ->
             TvPreview(
                 style = style,
                 replay = replay,
+                longSample = longSample,
                 onCorner = { onChange(style.copy(corner = it)) },
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
             )
+            Row(
+                Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Text("Preview:", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                FilterChip(selected = !longSample, onClick = { longSample = false }, label = { Text("Short message") })
+                FilterChip(selected = longSample, onClick = { longSample = true }, label = { Text("Long message") })
+            }
             Text(
                 "Tap a corner of the TV to move the notification. ▶ replays the animation, ➤ sends a test to the TV.",
                 style = MaterialTheme.typography.bodySmall,
@@ -115,7 +130,18 @@ fun StyleScreen(style: NotifStyle, onChange: (NotifStyle) -> Unit, onBack: () ->
                 }
 
                 Section("Size & position") {
-                    SliderRow("Width", style.widthDp, 200..800, step = 10, unit = " dp") { onChange(style.copy(widthDp = it)) }
+                    SwitchRow("Automatic width", style.autoWidth) { onChange(style.copy(autoWidth = it)) }
+                    AnimatedVisibility(style.autoWidth) {
+                        Text(
+                            "Fits the text, up to the maximum width. Longer text wraps onto new lines.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(bottom = 4.dp)
+                        )
+                    }
+                    SliderRow(if (style.autoWidth) "Maximum width" else "Width", style.widthDp, 200..800, step = 10, unit = " dp") {
+                        onChange(style.copy(widthDp = it))
+                    }
                     SwitchRow("Automatic height", style.heightDp == 0) { auto -> onChange(style.copy(heightDp = if (auto) 0 else 120)) }
                     AnimatedVisibility(style.heightDp > 0) {
                         SliderRow("Height", style.heightDp.coerceAtLeast(60), 60..400, step = 5, unit = " dp") { onChange(style.copy(heightDp = it)) }
@@ -131,7 +157,7 @@ fun StyleScreen(style: NotifStyle, onChange: (NotifStyle) -> Unit, onBack: () ->
                     }
                     SliderRow("Title size", style.titleSp, 10..40, unit = " sp") { onChange(style.copy(titleSp = it)) }
                     SliderRow("Message size", style.textSp, 8..36, unit = " sp") { onChange(style.copy(textSp = it)) }
-                    SliderRow("Message lines", style.bodyLines, 1..10) { onChange(style.copy(bodyLines = it)) }
+                    SliderRow("Max message lines", style.bodyLines, 1..10) { onChange(style.copy(bodyLines = it)) }
                 }
 
                 Section("Icon") {
@@ -181,7 +207,7 @@ private fun Swatch(rgb: Int, selected: Boolean, onClick: () -> Unit) {
 }
 
 @Composable
-fun TvPreview(style: NotifStyle, replay: Int, onCorner: (Corner) -> Unit, modifier: Modifier = Modifier) {
+fun TvPreview(style: NotifStyle, replay: Int, longSample: Boolean, onCorner: (Corner) -> Unit, modifier: Modifier = Modifier) {
     val progress = remember { Animatable(1f) }
     LaunchedEffect(replay, style.anim) {
         progress.snapTo(0f)
@@ -227,7 +253,7 @@ fun TvPreview(style: NotifStyle, replay: Int, onCorner: (Corner) -> Unit, modifi
         val isRight = style.corner.isRight
 
         PreviewCard(
-            style, scale,
+            style, scale, if (longSample) LONG_TEXT else SHORT_TEXT,
             Modifier.align(align).padding((style.marginDp * scale).dp).graphicsLayer {
                 val p = progress.value
                 when (style.anim) {
@@ -246,15 +272,16 @@ fun TvPreview(style: NotifStyle, replay: Int, onCorner: (Corner) -> Unit, modifi
 }
 
 @Composable
-private fun PreviewCard(style: NotifStyle, scale: Float, modifier: Modifier) {
+private fun PreviewCard(style: NotifStyle, scale: Float, body: String, modifier: Modifier) {
     val rgb = Color(0xFF000000.toInt() or style.color)
     val bg = rgb.copy(alpha = style.opacity / 100f)
     val fg = if (rgb.luminance() > 0.5f) Color.Black else Color.White
     val shape = RoundedCornerShape((style.radiusDp * scale).dp)
+    val widthMod = if (style.autoWidth) Modifier.widthIn(max = (style.widthDp * scale).dp) else Modifier.width((style.widthDp * scale).dp)
     val heightMod = if (style.heightDp > 0) Modifier.height((style.heightDp * scale).dp) else Modifier
 
     Row(
-        modifier.width((style.widthDp * scale).dp).then(heightMod)
+        modifier.then(widthMod).then(heightMod)
             .shadow((8 * scale).dp, shape)
             .clip(shape)
             .background(bg)
@@ -270,11 +297,8 @@ private fun PreviewCard(style: NotifStyle, scale: Float, modifier: Modifier) {
         }
         Column {
             if (style.showAppName) PText("Messages", style.appNameSp, scale, fg.copy(alpha = 0.7f))
-            PText("Alex", style.titleSp, scale, fg, bold = true)
-            PText(
-                "Hey! Are we still on for tonight? I'll bring snacks and the new board game everyone keeps talking about.",
-                style.textSp, scale, fg, lines = style.bodyLines
-            )
+            PText("Alex", style.titleSp, scale, fg, bold = true, lines = 2)
+            PText(body, style.textSp, scale, fg, lines = style.bodyLines)
         }
     }
 }

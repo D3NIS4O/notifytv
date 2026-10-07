@@ -26,6 +26,21 @@ import android.widget.TextView
 import androidx.core.view.doOnPreDraw
 import org.json.JSONObject
 
+/** LinearLayout that wraps its content but never grows wider than [maxPx] (0 = no limit). */
+private class MaxWidthLinearLayout(ctx: Context, private val maxPx: Int) : LinearLayout(ctx) {
+    override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
+        var spec = widthMeasureSpec
+        if (maxPx > 0) {
+            val size = MeasureSpec.getSize(widthMeasureSpec)
+            val mode = MeasureSpec.getMode(widthMeasureSpec)
+            if (mode == MeasureSpec.UNSPECIFIED || size > maxPx) {
+                spec = MeasureSpec.makeMeasureSpec(maxPx, MeasureSpec.AT_MOST)
+            }
+        }
+        super.onMeasure(spec, heightMeasureSpec)
+    }
+}
+
 class OverlayManager(private val ctx: Context) {
     companion object {
         private const val MAX_PER_CORNER = 4
@@ -34,7 +49,8 @@ class OverlayManager(private val ctx: Context) {
     private class Style(j: JSONObject) {
         val corner: String = j.optString("corner", "TOP_RIGHT")
         val durationMs: Long = j.optLong("durationMs", 6000)
-        val width: Int = j.optInt("widthDp", 380)
+        val width: Int = j.optInt("widthDp", 420)
+        val autoWidth: Boolean = j.optBoolean("autoWidth", true)
         val height: Int = j.optInt("heightDp", 0)
         val appNameSp: Float = j.optInt("appNameSp", 12).toFloat()
         val titleSp: Float = j.optInt("titleSp", 16).toFloat()
@@ -77,7 +93,10 @@ class OverlayManager(private val ctx: Context) {
 
         val card = buildCard(j, s)
         styles[card] = s
-        val lp = LinearLayout.LayoutParams(dp(s.width), if (s.height > 0) dp(s.height) else ViewGroup.LayoutParams.WRAP_CONTENT)
+        val lp = LinearLayout.LayoutParams(
+            if (s.autoWidth) ViewGroup.LayoutParams.WRAP_CONTENT else dp(s.width),
+            if (s.height > 0) dp(s.height) else ViewGroup.LayoutParams.WRAP_CONTENT
+        )
         lp.topMargin = dp(6)
         lp.bottomMargin = dp(6)
         card.alpha = 0f
@@ -213,7 +232,7 @@ class OverlayManager(private val ctx: Context) {
         }
 
     private fun buildCard(j: JSONObject, s: Style): View {
-        val card = LinearLayout(ctx).apply {
+        val card = MaxWidthLinearLayout(ctx, if (s.autoWidth) dp(s.width) else 0).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
             setPadding(dp(16), dp(14), dp(16), dp(14))
@@ -236,10 +255,11 @@ class OverlayManager(private val ctx: Context) {
         }
         val col = LinearLayout(ctx).apply { orientation = LinearLayout.VERTICAL }
         if (s.showAppName) col.addView(text(j.optString("appName"), s.appNameSp, s.fg, alpha = 0.7f))
-        col.addView(text(j.optString("title"), s.titleSp, s.fg, bold = true))
+        col.addView(text(j.optString("title"), s.titleSp, s.fg, bold = true, lines = 2))
         val body = j.optString("text")
         if (body.isNotEmpty()) col.addView(text(body, s.textSp, s.fg, lines = s.bodyLines))
-        card.addView(col, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+        val colWidth = if (s.autoWidth) ViewGroup.LayoutParams.WRAP_CONTENT else ViewGroup.LayoutParams.MATCH_PARENT
+        card.addView(col, LinearLayout.LayoutParams(colWidth, ViewGroup.LayoutParams.WRAP_CONTENT))
         return card
     }
 }

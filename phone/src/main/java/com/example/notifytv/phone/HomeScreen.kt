@@ -101,6 +101,8 @@ fun HomeScreen(resumeTick: Int, style: NotifStyle, appCount: Int, onOpenStyle: (
         }
     }
 
+    val widthText = if (style.autoWidth) "auto width" else "${style.widthDp} dp"
+
     val scroll = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
     Scaffold(
         modifier = Modifier.nestedScroll(scroll.nestedScrollConnection),
@@ -156,7 +158,7 @@ fun HomeScreen(resumeTick: Int, style: NotifStyle, appCount: Int, onOpenStyle: (
                 NavItem(
                     painterResource(R.drawable.ic_palette),
                     "Notification style",
-                    "${style.corner.label} · ${style.widthDp} dp · ${style.durationSec} s · ${style.anim.label}",
+                    "${style.corner.label} · $widthText · ${style.durationSec} s · ${style.anim.label}",
                     onOpenStyle
                 )
                 HorizontalDivider(Modifier.padding(horizontal = 16.dp), color = MaterialTheme.colorScheme.outlineVariant)
