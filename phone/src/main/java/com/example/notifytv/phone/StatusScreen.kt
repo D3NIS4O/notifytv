@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -56,12 +57,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
-import androidx.compose.ui.geometry.CornerRadius
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
+import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
@@ -262,63 +261,79 @@ private fun StatusPreview(s: StatusSettings, weather: Weather.Now?, onCorner: (C
     }
 }
 
+/** Mirrors the TV: weather badge, battery badge and the clock, with the clock closest to the chosen corner. */
 @Composable
 private fun StatusPill(
     s: StatusSettings, scale: Float, time: String, level: Int, charging: Boolean, weather: Weather.Now?, modifier: Modifier
 ) {
-    val fs = s.sizeSp * scale
-    Row(
-        modifier.clip(RoundedCornerShape(percent = 50))
-            .background(Color.Black.copy(alpha = s.opacity / 100f))
-            .padding(horizontal = (fs * 0.8f).dp, vertical = (fs * 0.35f).dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy((fs * 0.8f).dp)
-    ) {
-        if (s.showBattery) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                BatteryGlyph(level, charging, Modifier.size(width = (fs * 1.33f).dp, height = (fs * 0.7f).dp))
-                Spacer(Modifier.width((fs * 0.3f).dp))
-                Text("$level%", color = Color.White, fontSize = (fs * 0.85f).sp)
+    val u = s.sizeSp * scale
+    val badges = buildList {
+        if (s.showWeather) add("weather")
+        if (s.showBattery) add("battery")
+    }
+    val parts = when {
+        !s.showClock -> badges
+        s.corner.isRight -> badges + "clock"
+        else -> listOf("clock") + badges
+    }
+    Row(modifier, verticalAlignment = Alignment.CenterVertically) {
+        parts.forEachIndexed { i, p ->
+            if (i > 0) {
+                val nearClock = p == "clock" || parts[i - 1] == "clock"
+                Spacer(Modifier.width((u * if (nearClock) 0.7f else 0.4f).dp))
+            }
+            when (p) {
+                "weather" -> Badge(u, s.opacity) {
+                    val kind = weather?.let { StatusIcons.weatherFor(it.code, it.isDay) } ?: StatusIcons.Weather.CLOUDY
+                    WeatherIcon(kind, Modifier.size((u * 1.15f).dp))
+                    Spacer(Modifier.width((u * 0.35f).dp))
+                    BadgeText(if (weather != null) "${weather.rounded}\u00b0" else "\u2014\u00b0", u * 0.9f)
+                }
+                "battery" -> Badge(u, s.opacity) {
+                    BatteryIcon(level, charging, Modifier.size(width = (u * 1.2f).dp, height = (u * 0.62f).dp))
+                    Spacer(Modifier.width((u * 0.35f).dp))
+                    BadgeText("$level%", u * 0.9f)
+                }
+                else -> BadgeText(time, u * 1.15f)
             }
         }
-        if (s.showWeather) {
-            Text(
-                if (weather != null) "${weather.icon} ${weather.rounded}\u00b0" else "\u2014\u00b0",
-                color = Color.White,
-                fontSize = (fs * 0.85f).sp
-            )
-        }
-        if (s.showClock) Text(time, color = Color.White, fontSize = fs.sp, fontWeight = FontWeight.Medium)
     }
 }
 
-/** Same battery icon the TV draws: outline, cap, and a fill that is green while charging and red when low. */
 @Composable
-private fun BatteryGlyph(level: Int, charging: Boolean, modifier: Modifier) {
+private fun Badge(u: Float, opacity: Int, content: @Composable RowScope.() -> Unit) {
+    val shape = RoundedCornerShape(percent = 50)
+    Row(
+        Modifier.height((u * 1.85f).dp)
+            .clip(shape)
+            .background(Color.Black.copy(alpha = opacity / 100f))
+            .border((u * 0.075f).coerceAtLeast(0.6f).dp, Color.White, shape)
+            .padding(start = (u * 0.55f).dp, end = (u * 0.65f).dp),
+        verticalAlignment = Alignment.CenterVertically,
+        content = content
+    )
+}
+
+@Composable
+private fun BadgeText(text: String, sizeDp: Float) {
+    Text(text, color = Color.White, fontSize = sizeDp.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+}
+
+@Composable
+private fun WeatherIcon(kind: StatusIcons.Weather, modifier: Modifier) {
     Canvas(modifier) {
-        val cap = size.width * 0.08f
-        val body = size.width - cap
-        val stroke = size.height * 0.12f
-        val r = size.height * 0.22f
-        drawRoundRect(
-            Color.White,
-            topLeft = Offset(stroke / 2, stroke / 2),
-            size = Size(body - stroke, size.height - stroke),
-            cornerRadius = CornerRadius(r, r),
-            style = Stroke(stroke)
-        )
-        drawRect(Color.White, topLeft = Offset(body, size.height * 0.3f), size = Size(cap, size.height * 0.4f))
-        val fill = when {
-            charging -> Color(0xFF66BB6A)
-            level <= 15 -> Color(0xFFEF5350)
-            else -> Color.White
+        drawIntoCanvas {
+            StatusIcons.drawWeather(it.nativeCanvas, kind, 0f, 0f, minOf(size.width, size.height), android.graphics.Color.WHITE)
         }
-        val inset = stroke * 1.8f
-        drawRoundRect(
-            fill,
-            topLeft = Offset(inset, inset),
-            size = Size((body - inset * 2) * level / 100f, size.height - inset * 2),
-            cornerRadius = CornerRadius(r / 2, r / 2)
-        )
     }
 }
+
+@Composable
+private fun BatteryIcon(level: Int, charging: Boolean, modifier: Modifier) {
+    Canvas(modifier) {
+        drawIntoCanvas {
+            StatusIcons.drawBattery(it.nativeCanvas, 0f, 0f, size.width, size.height, level, charging, android.graphics.Color.WHITE)
+        }
+    }
+}
+
