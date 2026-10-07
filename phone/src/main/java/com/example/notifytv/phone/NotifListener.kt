@@ -1,8 +1,12 @@
 package com.example.notifytv.phone
 
 import android.app.Notification
+import android.graphics.Bitmap
+import android.graphics.drawable.Drawable
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
+import androidx.core.app.NotificationCompat
+import androidx.core.graphics.drawable.toBitmap
 
 class NotifListener : NotificationListenerService() {
     private var lastKey = ""
@@ -27,6 +31,19 @@ class NotifListener : NotificationListenerService() {
         lastKey = key
         lastTime = now
 
-        TvSender.sendNotification(this, sbn.packageName, title, text)
+        TvSender.sendNotification(this, sbn.packageName, title, text, photo = senderPhoto(n))
     }
+
+    /** Profile picture of whoever sent the notification (e.g. the Instagram user), if the app provides one. */
+    @Suppress("DEPRECATION")
+    private fun senderPhoto(n: Notification): Bitmap? = runCatching {
+        // Chat apps: picture of the person who sent the latest message.
+        val fromChat = NotificationCompat.MessagingStyle.extractMessagingStyleFromNotification(n)
+            ?.messages?.lastOrNull { it.person?.icon != null }
+            ?.person?.icon?.loadDrawable(this)
+        // Most other apps (Instagram included) put the sender's picture in the large icon.
+        val drawable: Drawable? = fromChat ?: n.getLargeIcon()?.loadDrawable(this)
+        val bmp = drawable?.toBitmap(192, 192) ?: (n.extras.getParcelable(Notification.EXTRA_LARGE_ICON) as? Bitmap)
+        bmp?.let { if (it.config == Bitmap.Config.HARDWARE) it.copy(Bitmap.Config.ARGB_8888, false) else it }
+    }.getOrNull()
 }

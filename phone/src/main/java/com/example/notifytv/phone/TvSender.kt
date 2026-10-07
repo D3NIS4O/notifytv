@@ -2,6 +2,12 @@ package com.example.notifytv.phone
 
 import android.content.Context
 import android.graphics.Bitmap
+import android.graphics.BitmapShader
+import android.graphics.Canvas
+import android.graphics.Color
+import android.graphics.Paint
+import android.graphics.Rect
+import android.graphics.Shader
 import android.os.Handler
 import android.os.Looper
 import android.util.Base64
@@ -33,7 +39,10 @@ object TvSender {
     fun sendTest(c: Context, onResult: ((Boolean) -> Unit)? = null) =
         sendNotification(c, c.packageName, "Alex", "Hey! Are we still on for tonight? This is how your notifications will look on the TV.", onResult)
 
-    fun sendNotification(c: Context, pkg: String, title: String, text: String, onResult: ((Boolean) -> Unit)? = null) {
+    fun sendNotification(
+        c: Context, pkg: String, title: String, text: String,
+        onResult: ((Boolean) -> Unit)? = null, photo: Bitmap? = null
+    ) {
         val ctx = c.applicationContext
         exec.execute {
             val st = Prefs.style(ctx)
@@ -41,7 +50,9 @@ object TvSender {
             val appName = runCatching { pm.getApplicationLabel(pm.getApplicationInfo(pkg, 0)).toString() }.getOrDefault(pkg)
             val iconPx = (st.iconDp * 2).coerceIn(64, 192)
             val icon = runCatching {
-                val bmp = pm.getApplicationIcon(pkg).toBitmap(iconPx, iconPx)
+                val appIcon = soft(pm.getApplicationIcon(pkg).toBitmap(iconPx, iconPx))
+                // Sender's profile picture with the app logo as a small badge; just the app logo if there's no picture.
+                val bmp = photo?.let { p -> runCatching { withBadge(soft(p), appIcon, iconPx) }.getOrNull() } ?: appIcon
                 val out = ByteArrayOutputStream()
                 bmp.compress(Bitmap.CompressFormat.PNG, 100, out)
                 Base64.encodeToString(out.toByteArray(), Base64.NO_WRAP)
@@ -61,6 +72,32 @@ object TvSender {
             val ok = sendOrDiscover(ctx, json)
             if (onResult != null) main.post { onResult(ok) }
         }
+    }
+
+    private fun soft(b: Bitmap): Bitmap =
+        if (b.config == Bitmap.Config.HARDWARE) b.copy(Bitmap.Config.ARGB_8888, false) else b
+
+    /** Round profile picture with the app logo in a small white circle at the bottom-right. */
+    private fun withBadge(photo: Bitmap, app: Bitmap, size: Int): Bitmap {
+        val side = minOf(photo.width, photo.height)
+        val square = Bitmap.createBitmap(photo, (photo.width - side) / 2, (photo.height - side) / 2, side, side)
+        val scaled = Bitmap.createScaledBitmap(square, size, size, true)
+
+        val out = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(out)
+        val paint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
+        paint.shader = BitmapShader(scaled, Shader.TileMode.CLAMP, Shader.TileMode.CLAMP)
+        canvas.drawCircle(size / 2f, size / 2f, size / 2f, paint)
+        paint.shader = null
+
+        val badge = (size * 0.42f).toInt()
+        val left = size - badge
+        val top = size - badge
+        paint.color = Color.WHITE
+        canvas.drawCircle(left + badge / 2f, top + badge / 2f, badge / 2f, paint)
+        val inset = (badge * 0.12f).toInt()
+        canvas.drawBitmap(app, null, Rect(left + inset, top + inset, size - inset, size - inset), paint)
+        return out
     }
 
     /** Sends to the saved TV; if that fails, looks for the TV on 192.168.0.101-109 and tries once more. */
