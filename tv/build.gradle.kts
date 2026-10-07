@@ -7,8 +7,8 @@ android {
         applicationId = "com.example.notifytv.tv"
         minSdk = 23
         targetSdk = 34
-        versionCode = 5
-        versionName = "5.0"
+        versionCode = 6
+        versionName = "5.1"
     }
     signingConfigs {
         getByName("debug") {

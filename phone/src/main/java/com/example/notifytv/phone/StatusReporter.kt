@@ -66,6 +66,8 @@ object StatusReporter {
                         .put("temp", w.rounded)
                         .put("unit", if (s.fahrenheit) "F" else "C")
                         .put("icon", w.icon)
+                        .put("code", w.code)
+                        .put("isDay", w.isDay)
                 )
             }
         }
