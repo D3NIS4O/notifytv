@@ -133,19 +133,24 @@ fun StyleScreen(style: NotifStyle, onChange: (NotifStyle) -> Unit, onBack: () ->
                     SwitchRow("Automatic width", style.autoWidth) { onChange(style.copy(autoWidth = it)) }
                     Text(
                         if (style.autoWidth) "The notification is as wide as its text and grows up to the maximum width. Longer text continues on new lines."
-                        else "Every notification has the same width. Longer text continues on new lines.",
+                        else "Every notification has the same width.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(bottom = 4.dp)
                     )
                     SliderRow(if (style.autoWidth) "Maximum width" else "Width", style.widthDp, 200..800, step = 10, unit = " dp") { onChange(style.copy(widthDp = it)) }
+
+                    SwitchRow("Automatic height", style.heightDp == 0) { auto -> onChange(style.copy(heightDp = if (auto) 0 else 100)) }
                     Text(
-                        "Height is always automatic: the notification grows taller whenever text wraps onto a new line.",
+                        if (style.heightDp == 0) "The notification gets taller whenever the text wraps onto new lines."
+                        else "Never shorter than the minimum height, and still gets taller when the text wraps onto new lines.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(top = 8.dp, bottom = 4.dp)
+                        modifier = Modifier.padding(bottom = 4.dp)
                     )
-                    SliderRow("Minimum height", style.heightDp, 0..300, step = 10, unit = " dp") { onChange(style.copy(heightDp = it)) }
+                    AnimatedVisibility(style.heightDp > 0) {
+                        SliderRow("Minimum height", style.heightDp.coerceAtLeast(40), 40..400, step = 5, unit = " dp") { onChange(style.copy(heightDp = it)) }
+                    }
                     SliderRow("Distance from edge", style.marginDp, 0..120, step = 2, unit = " dp") { onChange(style.copy(marginDp = it)) }
                     SliderRow("Corner roundness", style.radiusDp, 0..48, unit = " dp") { onChange(style.copy(radiusDp = it)) }
                 }
@@ -278,7 +283,8 @@ private fun PreviewCard(style: NotifStyle, scale: Float, body: String, modifier:
     val fg = if (rgb.luminance() > 0.5f) Color.Black else Color.White
     val shape = RoundedCornerShape((style.radiusDp * scale).dp)
     val widthMod = if (style.autoWidth) Modifier.widthIn(max = (style.widthDp * scale).dp) else Modifier.width((style.widthDp * scale).dp)
-    val heightMod = Modifier.heightIn(min = (style.heightDp * scale).dp)
+    // Height always grows with the content; a set height only acts as a minimum.
+    val heightMod = if (style.heightDp > 0) Modifier.heightIn(min = (style.heightDp * scale).dp) else Modifier
 
     Row(
         modifier.then(widthMod).then(heightMod)
