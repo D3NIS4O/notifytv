@@ -64,6 +64,13 @@ class ReceiverService : Service() {
                 while (true) {
                     val line = reader.readLine() ?: break
                     val json = runCatching { JSONObject(line) }.getOrNull() ?: continue
+                    if (json.optString("type") == "discover") {
+                        // Lets phones on the same WiFi find this TV and pair without scanning the QR code.
+                        val reply = JSONObject().put("ok", true).put("app", "notifytv").put("token", Token.get(this))
+                        out.write((reply.toString() + "\n").toByteArray())
+                        out.flush()
+                        continue
+                    }
                     if (json.optString("token") != Token.get(this)) {
                         out.write("{\"ok\":false,\"error\":\"bad token\"}\n".toByteArray())
                         out.flush()

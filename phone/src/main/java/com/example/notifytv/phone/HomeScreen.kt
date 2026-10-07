@@ -78,12 +78,12 @@ fun HomeScreen(resumeTick: Int, style: NotifStyle, appCount: Int, onOpenStyle: (
         NotificationManagerCompat.getEnabledListenerPackages(ctx).contains(ctx.packageName)
     }
 
-    LaunchedEffect(resumeTick, host) {
-        if (host == null) {
-            conn = Conn.NONE
-        } else {
-            conn = Conn.CHECKING
-            TvSender.ping(ctx) { ok -> conn = if (ok) Conn.OK else Conn.FAIL }
+    // Connects automatically: tries the saved TV, otherwise searches 192.168.0.101-109.
+    LaunchedEffect(resumeTick) {
+        conn = Conn.CHECKING
+        TvSender.ping(ctx) { ok ->
+            host = Prefs.host(ctx)
+            conn = if (ok) Conn.OK else if (host == null) Conn.NONE else Conn.FAIL
         }
     }
 
@@ -125,7 +125,10 @@ fun HomeScreen(resumeTick: Int, style: NotifStyle, appCount: Int, onOpenStyle: (
                 },
                 onTest = {
                     conn = Conn.CHECKING
-                    TvSender.sendTest(ctx) { ok -> conn = if (ok) Conn.OK else Conn.FAIL }
+                    TvSender.sendTest(ctx) { ok ->
+                        host = Prefs.host(ctx)
+                        conn = if (ok) Conn.OK else if (host == null) Conn.NONE else Conn.FAIL
+                    }
                 }
             )
 
@@ -186,8 +189,8 @@ private fun ConnectionCard(host: String?, conn: Conn, onScan: () -> Unit, onTest
     val title: String
     val dot: Color
     when (conn) {
-        Conn.NONE -> { title = "No TV paired"; dot = MaterialTheme.colorScheme.outline }
-        Conn.CHECKING -> { title = "Checking…"; dot = MaterialTheme.colorScheme.tertiary }
+        Conn.NONE -> { title = "No TV found"; dot = MaterialTheme.colorScheme.outline }
+        Conn.CHECKING -> { title = "Connecting…"; dot = MaterialTheme.colorScheme.tertiary }
         Conn.OK -> { title = "Connected"; dot = Color(0xFF43A047) }
         Conn.FAIL -> { title = "Can't reach TV"; dot = MaterialTheme.colorScheme.error }
     }
@@ -208,7 +211,7 @@ private fun ConnectionCard(host: String?, conn: Conn, onScan: () -> Unit, onTest
                         Text(title, style = MaterialTheme.typography.titleMedium)
                     }
                     Text(
-                        host ?: "Open NotifyTV on your TV and scan its QR code",
+                        host ?: "Open NotifyTV on your TV. It's found automatically at 192.168.0.101–109, or scan its QR code.",
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -221,7 +224,7 @@ private fun ConnectionCard(host: String?, conn: Conn, onScan: () -> Unit, onTest
                     Spacer(Modifier.width(8.dp))
                     Text(if (host == null) "Scan QR" else "Re-pair")
                 }
-                FilledTonalButton(onClick = onTest, enabled = host != null, modifier = Modifier.weight(1f)) {
+                FilledTonalButton(onClick = onTest, enabled = conn != Conn.CHECKING, modifier = Modifier.weight(1f)) {
                     Icon(Icons.AutoMirrored.Filled.Send, null, Modifier.size(18.dp))
                     Spacer(Modifier.width(8.dp))
                     Text("Test")
