@@ -1,5 +1,6 @@
 package com.example.notifytv.tv
 
+import android.animation.LayoutTransition
 import android.content.Context
 import android.graphics.BitmapFactory
 import android.graphics.Color
@@ -10,19 +11,56 @@ import android.os.Build
 import android.provider.Settings
 import android.text.TextUtils
 import android.util.Base64
+import android.util.TypedValue
 import android.view.Gravity
 import android.view.View
+import android.view.ViewGroup
 import android.view.WindowManager
+import android.view.animation.AccelerateInterpolator
+import android.view.animation.DecelerateInterpolator
+import android.view.animation.OvershootInterpolator
+import android.widget.FrameLayout
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
+import androidx.core.view.doOnPreDraw
 import org.json.JSONObject
 
 class OverlayManager(private val ctx: Context) {
-    private val wm = ctx.getSystemService(WindowManager::class.java)
-    private val current = mutableMapOf<String, View>()
+    companion object {
+        private const val MAX_PER_CORNER = 4
+    }
 
-    private fun dp(v: Int) = (v * ctx.resources.displayMetrics.density).toInt()
+    private class Style(j: JSONObject) {
+        val corner: String = j.optString("corner", "TOP_RIGHT")
+        val durationMs: Long = j.optLong("durationMs", 6000)
+        val width: Int = j.optInt("widthDp", 380)
+        val height: Int = j.optInt("heightDp", 0)
+        val appNameSp: Float = j.optInt("appNameSp", 12).toFloat()
+        val titleSp: Float = j.optInt("titleSp", 16).toFloat()
+        val textSp: Float = j.optInt("textSp", 14).toFloat()
+        val bodyLines: Int = j.optInt("bodyLines", 3)
+        val iconDp: Int = j.optInt("iconDp", 40)
+        val radiusDp: Int = j.optInt("radiusDp", 16)
+        val marginDp: Int = j.optInt("marginDp", 32)
+        val bg: Int = j.optInt("bgColor", 0xEB202020.toInt())
+        val fg: Int = j.optInt("textColor", Color.WHITE)
+        val showIcon: Boolean = j.optBoolean("showIcon", true)
+        val showAppName: Boolean = j.optBoolean("showAppName", true)
+        val anim: String = j.optString("anim", "SLIDE")
+        val animMs: Long = j.optLong("animMs", 350)
+        val isTop: Boolean = corner.startsWith("TOP")
+        val isRight: Boolean = corner.endsWith("RIGHT")
+    }
+
+    private val wm = ctx.getSystemService(WindowManager::class.java)
+    private val density = ctx.resources.displayMetrics.density
+    private var root: FrameLayout? = null
+    private val stacks = mutableMapOf<String, LinearLayout>()
+    private val styles = HashMap<View, Style>()
+    private val dismissing = HashSet<View>()
+
+    private fun dp(v: Int) = (v * density).toInt()
 
     @Suppress("DEPRECATION")
     private fun overlayType() =
@@ -31,78 +69,177 @@ class OverlayManager(private val ctx: Context) {
 
     fun show(j: JSONObject) {
         if (!Settings.canDrawOverlays(ctx)) return
-        val corner = j.optString("corner", "TOP_RIGHT")
-        val duration = j.optLong("durationMs", 5000)
-        val bg = j.optInt("bgColor", 0xE6202020.toInt())
-        val fg = j.optInt("textColor", Color.WHITE)
+        val s = Style(j)
+        val stack = stackFor(s)
 
-        current.remove(corner)?.let { old -> runCatching { wm.removeView(old) } }
+        val live = (0 until stack.childCount).map { stack.getChildAt(it) }.filter { it !in dismissing }
+        if (live.size >= MAX_PER_CORNER) dismiss(if (s.isTop) live.last() else live.first())
 
-        val view = buildView(j, bg, fg)
-        val params = WindowManager.LayoutParams(
-            dp(420), WindowManager.LayoutParams.WRAP_CONTENT,
+        val card = buildCard(j, s)
+        styles[card] = s
+        val lp = LinearLayout.LayoutParams(dp(s.width), if (s.height > 0) dp(s.height) else ViewGroup.LayoutParams.WRAP_CONTENT)
+        lp.topMargin = dp(6)
+        lp.bottomMargin = dp(6)
+        card.alpha = 0f
+        stack.addView(card, if (s.isTop) 0 else stack.childCount, lp)
+        card.doOnPreDraw { animateIn(card, s, stack) }
+        card.postDelayed({ dismiss(card) }, s.durationMs + s.animMs)
+    }
+
+    private fun ensureRoot(): FrameLayout {
+        root?.let { return it }
+        val r = FrameLayout(ctx).apply {
+            clipChildren = false
+            clipToPadding = false
+        }
+        val p = WindowManager.LayoutParams(
+            WindowManager.LayoutParams.MATCH_PARENT,
+            WindowManager.LayoutParams.MATCH_PARENT,
             overlayType(),
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
                 WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
-                WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
+                WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
+                WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED,
             PixelFormat.TRANSLUCENT
         )
-        params.gravity = when (corner) {
-            "TOP_LEFT" -> Gravity.TOP or Gravity.START
-            "BOTTOM_LEFT" -> Gravity.BOTTOM or Gravity.START
-            "BOTTOM_RIGHT" -> Gravity.BOTTOM or Gravity.END
-            else -> Gravity.TOP or Gravity.END
-        }
-        params.x = dp(32)
-        params.y = dp(32)
-
-        wm.addView(view, params)
-        current[corner] = view
-        view.alpha = 0f
-        view.animate().alpha(1f).setDuration(250).start()
-        view.postDelayed({
-            view.animate().alpha(0f).setDuration(300).withEndAction {
-                runCatching { wm.removeView(view) }
-                if (current[corner] === view) current.remove(corner)
-            }.start()
-        }, duration)
+        wm.addView(r, p)
+        root = r
+        return r
     }
 
-    private fun text(value: String, size: Float, fg: Int, bold: Boolean = false, alpha: Float = 1f, lines: Int = 1) =
+    private fun stackFor(s: Style): LinearLayout {
+        val r = ensureRoot()
+        val stack = stacks.getOrPut(s.corner) {
+            LinearLayout(ctx).apply {
+                orientation = LinearLayout.VERTICAL
+                clipChildren = false
+                clipToPadding = false
+                layoutTransition = LayoutTransition().apply {
+                    disableTransitionType(LayoutTransition.APPEARING)
+                    disableTransitionType(LayoutTransition.DISAPPEARING)
+                    setStartDelay(LayoutTransition.CHANGE_APPEARING, 0)
+                    setStartDelay(LayoutTransition.CHANGE_DISAPPEARING, 0)
+                    setDuration(250)
+                }
+                r.addView(this)
+            }
+        }
+        stack.gravity = if (s.isRight) Gravity.END else Gravity.START
+        val vertical = if (s.isTop) Gravity.TOP else Gravity.BOTTOM
+        val horizontal = if (s.isRight) Gravity.END else Gravity.START
+        val lp = FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT, vertical or horizontal)
+        val h = dp(s.marginDp)
+        val v = (dp(s.marginDp) - dp(6)).coerceAtLeast(0)
+        lp.setMargins(h, v, h, v)
+        stack.layoutParams = lp
+        return stack
+    }
+
+    private fun offX(card: View, stack: View, s: Style): Float {
+        val r = root ?: return 0f
+        val left = stack.left + card.left
+        return if (s.isRight) (r.width - left + dp(24)).toFloat() else -(left + card.width + dp(24)).toFloat()
+    }
+
+    private fun offY(card: View, stack: View, s: Style): Float {
+        val r = root ?: return 0f
+        val top = stack.top + card.top
+        return if (s.isTop) -(top + card.height + dp(24)).toFloat() else (r.height - top + dp(24)).toFloat()
+    }
+
+    private fun animateIn(card: View, s: Style, stack: View) {
+        val a = card.animate().setDuration(s.animMs)
+        when (s.anim) {
+            "FADE" -> {
+                card.alpha = 0f
+                a.alpha(1f).setInterpolator(DecelerateInterpolator())
+            }
+            "POP" -> {
+                card.alpha = 0f
+                card.scaleX = 0.8f
+                card.scaleY = 0.8f
+                a.alpha(1f).scaleX(1f).scaleY(1f).setInterpolator(OvershootInterpolator(1.6f))
+            }
+            "DROP" -> {
+                card.alpha = 1f
+                card.translationY = offY(card, stack, s)
+                a.translationY(0f).setInterpolator(DecelerateInterpolator(2f))
+            }
+            else -> {
+                card.alpha = 1f
+                card.translationX = offX(card, stack, s)
+                a.translationX(0f).setInterpolator(DecelerateInterpolator(2f))
+            }
+        }
+        a.start()
+    }
+
+    private fun dismiss(card: View) {
+        val stack = card.parent as? LinearLayout ?: return
+        if (!dismissing.add(card)) return
+        val s = styles[card] ?: return
+        card.animate().cancel()
+        val a = card.animate().setDuration(s.animMs).setInterpolator(AccelerateInterpolator(1.5f))
+        when (s.anim) {
+            "FADE" -> a.alpha(0f)
+            "POP" -> a.alpha(0f).scaleX(0.8f).scaleY(0.8f)
+            "DROP" -> a.translationY(offY(card, stack, s)).alpha(0f)
+            else -> a.translationX(offX(card, stack, s))
+        }
+        a.withEndAction {
+            stack.removeView(card)
+            dismissing.remove(card)
+            styles.remove(card)
+            cleanup()
+        }.start()
+    }
+
+    private fun cleanup() {
+        if (stacks.values.any { it.childCount > 0 }) return
+        root?.let { runCatching { wm.removeView(it) } }
+        root = null
+        stacks.clear()
+    }
+
+    private fun text(value: String, sizeSp: Float, color: Int, bold: Boolean = false, alpha: Float = 1f, lines: Int = 1) =
         TextView(ctx).apply {
             text = value
-            textSize = size
-            setTextColor(fg)
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, sizeSp)
+            setTextColor(color)
             this.alpha = alpha
             maxLines = lines
             ellipsize = TextUtils.TruncateAt.END
             if (bold) setTypeface(typeface, Typeface.BOLD)
         }
 
-    private fun buildView(j: JSONObject, bg: Int, fg: Int): View {
-        val root = LinearLayout(ctx).apply {
+    private fun buildCard(j: JSONObject, s: Style): View {
+        val card = LinearLayout(ctx).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
             setPadding(dp(16), dp(14), dp(16), dp(14))
-            background = GradientDrawable().apply { setColor(bg); cornerRadius = dp(16).toFloat() }
+            background = GradientDrawable().apply {
+                setColor(s.bg)
+                cornerRadius = dp(s.radiusDp).toFloat()
+            }
+            elevation = dp(8).toFloat()
         }
         val iconB64 = j.optString("icon")
-        if (iconB64.isNotEmpty()) {
+        if (s.showIcon && iconB64.isNotEmpty()) {
             runCatching {
                 val bytes = Base64.decode(iconB64, Base64.DEFAULT)
                 val bmp = BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
                 val iv = ImageView(ctx).apply { setImageBitmap(bmp) }
-                val lp = LinearLayout.LayoutParams(dp(40), dp(40))
+                val lp = LinearLayout.LayoutParams(dp(s.iconDp), dp(s.iconDp))
                 lp.marginEnd = dp(14)
-                root.addView(iv, lp)
+                card.addView(iv, lp)
             }
         }
         val col = LinearLayout(ctx).apply { orientation = LinearLayout.VERTICAL }
-        col.addView(text(j.optString("appName"), 12f, fg, alpha = 0.7f))
-        col.addView(text(j.optString("title"), 16f, fg, bold = true))
+        if (s.showAppName) col.addView(text(j.optString("appName"), s.appNameSp, s.fg, alpha = 0.7f))
+        col.addView(text(j.optString("title"), s.titleSp, s.fg, bold = true))
         val body = j.optString("text")
-        if (body.isNotEmpty()) col.addView(text(body, 14f, fg, lines = 3))
-        root.addView(col)
-        return root
+        if (body.isNotEmpty()) col.addView(text(body, s.textSp, s.fg, lines = s.bodyLines))
+        card.addView(col, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+        return card
     }
 }

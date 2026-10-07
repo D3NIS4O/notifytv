@@ -7,8 +7,17 @@ android {
         applicationId = "com.example.notifytv.tv"
         minSdk = 23
         targetSdk = 34
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = 2
+        versionName = "2.0"
+    }
+    signingConfigs {
+        getByName("debug") {
+            storeFile = rootProject.file("keystore/notifytv.p12")
+            storePassword = "notifytv"
+            keyAlias = "notifytv"
+            keyPassword = "notifytv"
+            storeType = "pkcs12"
+        }
     }
     compileOptions { sourceCompatibility = JavaVersion.VERSION_17; targetCompatibility = JavaVersion.VERSION_17 }
     kotlinOptions { jvmTarget = "17" }

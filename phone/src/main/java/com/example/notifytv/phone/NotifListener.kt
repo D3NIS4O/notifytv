@@ -9,6 +9,7 @@ class NotifListener : NotificationListenerService() {
     private var lastTime = 0L
 
     override fun onNotificationPosted(sbn: StatusBarNotification) {
+        if (!Prefs.forwarding(this)) return
         val n = sbn.notification ?: return
         if (sbn.isOngoing) return
         if ((n.flags and Notification.FLAG_GROUP_SUMMARY) != 0) return

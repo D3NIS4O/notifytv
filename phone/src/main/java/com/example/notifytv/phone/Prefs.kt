@@ -11,14 +11,11 @@ object Prefs {
     fun setTarget(c: Context, host: String, port: Int, token: String) =
         sp(c).edit().putString("host", host).putInt("port", port).putString("token", token).apply()
 
-    fun corner(c: Context): String = sp(c).getString("corner", "TOP_RIGHT") ?: "TOP_RIGHT"
-    fun setCorner(c: Context, v: String) = sp(c).edit().putString("corner", v).apply()
+    fun style(c: Context): NotifStyle = NotifStyle.fromJson(sp(c).getString("style", null))
+    fun setStyle(c: Context, s: NotifStyle) = sp(c).edit().putString("style", s.toJson().toString()).apply()
 
-    fun durationSec(c: Context): Int = sp(c).getInt("duration", 6)
-    fun setDurationSec(c: Context, v: Int) = sp(c).edit().putInt("duration", v).apply()
-
-    fun bgColor(c: Context): Int = sp(c).getInt("bg", 0xE6202020.toInt())
-    fun setBgColor(c: Context, v: Int) = sp(c).edit().putInt("bg", v).apply()
+    fun forwarding(c: Context): Boolean = sp(c).getBoolean("forwarding", true)
+    fun setForwarding(c: Context, v: Boolean) = sp(c).edit().putBoolean("forwarding", v).apply()
 
     fun enabledApps(c: Context): Set<String> = sp(c).getStringSet("apps", emptySet())?.toSet() ?: emptySet()
     fun setEnabledApps(c: Context, v: Set<String>) = sp(c).edit().putStringSet("apps", HashSet(v)).apply()
