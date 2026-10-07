@@ -37,7 +37,8 @@ class OverlayManager(private val ctx: Context) {
         val durationMs: Long = j.optLong("durationMs", 6000)
         val autoWidth: Boolean = j.optBoolean("autoWidth", true)
         val width: Int = j.optInt("widthDp", 420)
-        val height: Int = j.optInt("heightDp", 0)
+        /** Minimum height; the card always grows taller to fit wrapped text. */
+        val minHeight: Int = j.optInt("heightDp", 0)
         val appNameSp: Float = j.optInt("appNameSp", 12).toFloat()
         val titleSp: Float = j.optInt("titleSp", 16).toFloat()
         val textSp: Float = j.optInt("textSp", 14).toFloat()
@@ -93,9 +94,10 @@ class OverlayManager(private val ctx: Context) {
 
         val card = buildCard(j, s)
         styles[card] = s
+        // Height is always WRAP_CONTENT so wrapped lines make the card taller.
         val lp = LinearLayout.LayoutParams(
             if (s.autoWidth) ViewGroup.LayoutParams.WRAP_CONTENT else dp(s.width),
-            if (s.height > 0) dp(s.height) else ViewGroup.LayoutParams.WRAP_CONTENT
+            ViewGroup.LayoutParams.WRAP_CONTENT
         )
         lp.topMargin = dp(6)
         lp.bottomMargin = dp(6)
@@ -227,6 +229,7 @@ class OverlayManager(private val ctx: Context) {
             setTextColor(color)
             this.alpha = alpha
             maxLines = lines
+            setHorizontallyScrolling(false)
             ellipsize = TextUtils.TruncateAt.END
             if (bold) setTypeface(typeface, Typeface.BOLD)
         }
@@ -236,6 +239,7 @@ class OverlayManager(private val ctx: Context) {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
             setPadding(dp(16), dp(14), dp(16), dp(14))
+            if (s.minHeight > 0) minimumHeight = dp(s.minHeight)
             background = GradientDrawable().apply {
                 setColor(s.bg)
                 cornerRadius = dp(s.radiusDp).toFloat()
