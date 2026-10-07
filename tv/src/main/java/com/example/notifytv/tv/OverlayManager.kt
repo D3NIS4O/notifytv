@@ -27,7 +27,11 @@ import android.widget.TextView
 import androidx.core.view.doOnPreDraw
 import org.json.JSONObject
 
-class OverlayManager(private val ctx: Context) {
+class OverlayManager(
+    private val ctx: Context,
+    /** Extra distance from the top/bottom edge to keep free in a corner (used by the clock pill). */
+    private val reserved: (String) -> Int = { 0 }
+) {
     companion object {
         private const val MAX_PER_CORNER = 4
     }
@@ -151,7 +155,7 @@ class OverlayManager(private val ctx: Context) {
         val horizontal = if (s.isRight) Gravity.END else Gravity.START
         val lp = FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT, vertical or horizontal)
         val h = dp(s.marginDp)
-        val v = (dp(s.marginDp) - dp(6)).coerceAtLeast(0)
+        val v = maxOf((dp(s.marginDp) - dp(6)).coerceAtLeast(0), reserved(s.corner))
         lp.setMargins(h, v, h, v)
         stack.layoutParams = lp
         return stack

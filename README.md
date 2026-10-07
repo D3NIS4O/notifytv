@@ -5,6 +5,9 @@ Forward Android phone notifications to an Android TV over WiFi.
 - `tv/` - TV receiver. Shows a QR code; draws notifications as an overlay.
 - `phone/` - Phone sender. Scan the TV QR, pick apps, corner, duration, color.
 
+Optional always-on **clock, phone battery and weather** pill on the TV (phone app -> *Clock, battery & weather*):
+pick any of the 4 corners, 12/24h, size, opacity and your city. Weather comes from [Open-Meteo](https://open-meteo.com) (no API key).
+
 APKs are built by GitHub Actions on every push and attached to a Release (see the Releases page).
 
 ## Setup

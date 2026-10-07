@@ -74,6 +74,12 @@ object TvSender {
         }
     }
 
+    /** Sends a clock/battery/weather update. Blocking: call it from a background thread. */
+    fun sendStatusBlocking(c: Context, json: JSONObject, discover: Boolean): Boolean {
+        json.put("token", Prefs.token(c))
+        return if (discover) sendOrDiscover(c, json) else send(c, json)
+    }
+
     private fun soft(b: Bitmap): Bitmap =
         if (b.config == Bitmap.Config.HARDWARE) b.copy(Bitmap.Config.ARGB_8888, false) else b
 

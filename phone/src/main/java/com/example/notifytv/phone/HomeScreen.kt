@@ -69,7 +69,15 @@ private enum class Conn { NONE, CHECKING, OK, FAIL }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun HomeScreen(resumeTick: Int, style: NotifStyle, appCount: Int, onOpenStyle: () -> Unit, onOpenApps: () -> Unit) {
+fun HomeScreen(
+    resumeTick: Int,
+    style: NotifStyle,
+    appCount: Int,
+    status: StatusSettings,
+    onOpenStyle: () -> Unit,
+    onOpenStatus: () -> Unit,
+    onOpenApps: () -> Unit
+) {
     val ctx = LocalContext.current
     var host by remember { mutableStateOf(Prefs.host(ctx)) }
     var conn by remember { mutableStateOf(Conn.NONE) }
@@ -163,6 +171,13 @@ fun HomeScreen(resumeTick: Int, style: NotifStyle, appCount: Int, onOpenStyle: (
                     "Notification style",
                     "${style.corner.label} · $widthText · ${style.durationSec} s · ${style.anim.label}",
                     onOpenStyle
+                )
+                HorizontalDivider(Modifier.padding(horizontal = 16.dp), color = MaterialTheme.colorScheme.outlineVariant)
+                NavItem(
+                    painterResource(R.drawable.ic_clock),
+                    "Clock, battery & weather",
+                    status.summary,
+                    onOpenStatus
                 )
                 HorizontalDivider(Modifier.padding(horizontal = 16.dp), color = MaterialTheme.colorScheme.outlineVariant)
                 NavItem(
