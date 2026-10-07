@@ -24,6 +24,8 @@ data class NotifStyle(
     val iconDp: Int = 40,
     val radiusDp: Int = 16,
     val marginDp: Int = 32,
+    val padHDp: Int = 16,
+    val padVDp: Int = 14,
     val color: Int = 0x202020,
     val opacity: Int = 92,
     val showIcon: Boolean = true,
@@ -49,6 +51,8 @@ data class NotifStyle(
         .put("iconDp", iconDp)
         .put("radiusDp", radiusDp)
         .put("marginDp", marginDp)
+        .put("padHDp", padHDp)
+        .put("padVDp", padVDp)
         .put("color", color)
         .put("opacity", opacity)
         .put("showIcon", showIcon)
@@ -74,6 +78,8 @@ data class NotifStyle(
                 iconDp = j.optInt("iconDp", d.iconDp),
                 radiusDp = j.optInt("radiusDp", d.radiusDp),
                 marginDp = j.optInt("marginDp", d.marginDp),
+                padHDp = j.optInt("padHDp", d.padHDp),
+                padVDp = j.optInt("padVDp", d.padVDp),
                 color = j.optInt("color", d.color),
                 opacity = j.optInt("opacity", d.opacity),
                 showIcon = j.optBoolean("showIcon", d.showIcon),

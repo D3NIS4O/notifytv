@@ -153,6 +153,14 @@ fun StyleScreen(style: NotifStyle, onChange: (NotifStyle) -> Unit, onBack: () ->
                     }
                     SliderRow("Distance from edge", style.marginDp, 0..120, step = 2, unit = " dp") { onChange(style.copy(marginDp = it)) }
                     SliderRow("Corner roundness", style.radiusDp, 0..48, unit = " dp") { onChange(style.copy(radiusDp = it)) }
+                    Text(
+                        "Inner padding: the empty space between the content and the edges of the notification.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(top = 8.dp, bottom = 4.dp)
+                    )
+                    SliderRow("Padding left & right", style.padHDp, 0..64, unit = " dp") { onChange(style.copy(padHDp = it)) }
+                    SliderRow("Padding top & bottom", style.padVDp, 0..64, unit = " dp") { onChange(style.copy(padVDp = it)) }
                 }
 
                 Section("Text") {
@@ -291,7 +299,7 @@ private fun PreviewCard(style: NotifStyle, scale: Float, body: String, modifier:
             .shadow((8 * scale).dp, shape)
             .clip(shape)
             .background(bg)
-            .padding(horizontal = (16 * scale).dp, vertical = (14 * scale).dp),
+            .padding(horizontal = (style.padHDp * scale).dp, vertical = (style.padVDp * scale).dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         if (style.showIcon) {

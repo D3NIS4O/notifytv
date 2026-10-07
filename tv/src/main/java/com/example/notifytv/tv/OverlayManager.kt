@@ -45,6 +45,8 @@ class OverlayManager(private val ctx: Context) {
         val iconDp: Int = j.optInt("iconDp", 40)
         val radiusDp: Int = j.optInt("radiusDp", 16)
         val marginDp: Int = j.optInt("marginDp", 32)
+        val padHDp: Int = j.optInt("padHDp", 16).coerceIn(0, 200)
+        val padVDp: Int = j.optInt("padVDp", 14).coerceIn(0, 200)
         val bg: Int = j.optInt("bgColor", 0xEB202020.toInt())
         val fg: Int = j.optInt("textColor", Color.WHITE)
         val showIcon: Boolean = j.optBoolean("showIcon", true)
@@ -236,7 +238,7 @@ class OverlayManager(private val ctx: Context) {
         val card = MaxWidthLinearLayout(ctx, dp(s.width)).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
-            setPadding(dp(16), dp(14), dp(16), dp(14))
+            setPadding(dp(s.padHDp), dp(s.padVDp), dp(s.padHDp), dp(s.padVDp))
             background = GradientDrawable().apply {
                 setColor(s.bg)
                 cornerRadius = dp(s.radiusDp).toFloat()
