@@ -23,10 +23,14 @@ class ReceiverService : Service() {
     private var server: ServerSocket? = null
     private val main = Handler(Looper.getMainLooper())
     private lateinit var overlay: OverlayManager
+    private lateinit var status: StatusOverlay
 
     override fun onCreate() {
         super.onCreate()
-        overlay = OverlayManager(this)
+        status = StatusOverlay(this)
+        // Notifications in the same corner as the clock pill are pushed past it.
+        overlay = OverlayManager(this) { corner -> status.reservedPx(corner) }
+        status.start()
         goForeground()
         thread(name = "notifytv-server") { runServer() }
     }
@@ -37,6 +41,7 @@ class ReceiverService : Service() {
 
     override fun onDestroy() {
         runCatching { server?.close() }
+        status.stop()
         super.onDestroy()
     }
 
@@ -75,6 +80,9 @@ class ReceiverService : Service() {
                         out.write("{\"ok\":false,\"error\":\"bad token\"}\n".toByteArray())
                         out.flush()
                         break
+                    }
+                    if (json.optString("type") == "status") {
+                        main.post { runCatching { status.update(json) } }
                     }
                     if (json.optString("type") == "notification") {
                         main.post { runCatching { overlay.show(json) } }

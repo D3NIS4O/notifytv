@@ -14,6 +14,9 @@ object Prefs {
     fun style(c: Context): NotifStyle = NotifStyle.fromJson(sp(c).getString("style", null))
     fun setStyle(c: Context, s: NotifStyle) = sp(c).edit().putString("style", s.toJson().toString()).apply()
 
+    fun status(c: Context): StatusSettings = StatusSettings.fromJson(sp(c).getString("status", null))
+    fun setStatus(c: Context, s: StatusSettings) = sp(c).edit().putString("status", s.toJson().toString()).apply()
+
     fun forwarding(c: Context): Boolean = sp(c).getBoolean("forwarding", true)
     fun setForwarding(c: Context, v: Boolean) = sp(c).edit().putBoolean("forwarding", v).apply()
 

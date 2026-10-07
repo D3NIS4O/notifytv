@@ -34,7 +34,7 @@ import kotlinx.coroutines.withContext
 
 data class AppItem(val pkg: String, val label: String, val icon: ImageBitmap)
 
-enum class Screen { HOME, STYLE, APPS }
+enum class Screen { HOME, STYLE, STATUS, APPS }
 
 class MainActivity : ComponentActivity() {
     private val resumeTick = mutableIntStateOf(0)
@@ -74,8 +74,10 @@ fun App(resumeTick: Int) {
     var screen by rememberSaveable { mutableStateOf(Screen.HOME) }
     var style by remember { mutableStateOf(Prefs.style(ctx)) }
     var enabledApps by remember { mutableStateOf(Prefs.enabledApps(ctx)) }
+    var status by remember { mutableStateOf(Prefs.status(ctx)) }
     var apps by remember { mutableStateOf<List<AppItem>?>(null) }
     LaunchedEffect(Unit) { apps = withContext(Dispatchers.IO) { loadApps(ctx) } }
+    LaunchedEffect(Unit) { StatusReporter.sync(ctx) }
 
     BackHandler(enabled = screen != Screen.HOME) { screen = Screen.HOME }
 
@@ -95,12 +97,19 @@ fun App(resumeTick: Int) {
                 resumeTick = resumeTick,
                 style = style,
                 appCount = enabledApps.size,
+                status = status,
                 onOpenStyle = { screen = Screen.STYLE },
+                onOpenStatus = { screen = Screen.STATUS },
                 onOpenApps = { screen = Screen.APPS }
             )
             Screen.STYLE -> StyleScreen(
                 style = style,
                 onChange = { style = it; Prefs.setStyle(ctx, it) },
+                onBack = { screen = Screen.HOME }
+            )
+            Screen.STATUS -> StatusScreen(
+                settings = status,
+                onChange = { status = it; Prefs.setStatus(ctx, it); StatusReporter.sync(ctx) },
                 onBack = { screen = Screen.HOME }
             )
             Screen.APPS -> AppsScreen(

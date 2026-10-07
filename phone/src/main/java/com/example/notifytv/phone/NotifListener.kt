@@ -12,6 +12,17 @@ class NotifListener : NotificationListenerService() {
     private var lastKey = ""
     private var lastTime = 0L
 
+    override fun onListenerConnected() {
+        super.onListenerConnected()
+        // Keeps the TV's clock / battery / weather pill updated in the background.
+        StatusReporter.sync(this)
+    }
+
+    override fun onListenerDisconnected() {
+        StatusReporter.stop()
+        super.onListenerDisconnected()
+    }
+
     override fun onNotificationPosted(sbn: StatusBarNotification) {
         if (!Prefs.forwarding(this)) return
         val n = sbn.notification ?: return
