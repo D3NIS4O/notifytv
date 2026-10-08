@@ -6,7 +6,9 @@ Forward Android phone notifications to an Android TV over WiFi.
 - `phone/` - Phone sender. Scan the TV QR, pick apps, corner, duration, color.
 
 Optional always-on **clock, phone battery and weather** pill on the TV (phone app -> *Clock, battery & weather*):
-pick any of the 4 corners, 12/24h, size, opacity and your city. Weather comes from [Open-Meteo](https://open-meteo.com) (no API key).
+pick any of the 4 corners, 12/24h and your city. Weather comes from [Open-Meteo](https://open-meteo.com) (no API key).
+The weather and battery badges are styled separately: font size, bold, icon size, height, padding, corner roundness,
+border weight and background opacity. The last known battery/weather stays on the TV until the phone sends a newer value.
 
 APKs are built by GitHub Actions on every push and attached to a Release (see the Releases page).
 

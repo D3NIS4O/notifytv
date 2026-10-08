@@ -26,13 +26,11 @@ import kotlin.math.roundToInt
 /**
  * Always-on status row in the corner picked on the phone: a weather badge, a phone battery badge and the clock.
  * The clock is always the item closest to the corner. Badges are outlined pills with a translucent dark fill,
- * styled like native TV status indicators. The clock runs on the TV; battery and weather come from the phone
- * and are hidden when they get stale.
+ * styled like native TV status indicators; every badge's look (font, icon, height, padding, roundness, border,
+ * opacity) is set on the phone. The clock runs on the TV; battery and weather come from the phone and the last
+ * known values stay on screen indefinitely (also across TV reboots) until the phone sends newer ones.
  */
 class StatusOverlay(private val ctx: Context) {
-    companion object {
-        private const val STALE_MS = 3 * 60 * 1000L
-    }
 
     private val wm = ctx.getSystemService(WindowManager::class.java)
     private val density = ctx.resources.displayMetrics.density
@@ -42,9 +40,8 @@ class StatusOverlay(private val ctx: Context) {
     // Saved so the clock comes back after a TV reboot even before the phone reconnects.
     private var config: JSONObject =
         runCatching { JSONObject(prefs.getString("config", null) ?: "{}") }.getOrDefault(JSONObject())
-    private var battery: JSONObject? = null
-    private var weather: JSONObject? = null
-    private var lastPhone = 0L
+    private var battery: JSONObject? = load("battery")
+    private var weather: JSONObject? = load("weather")
 
     private var row: LinearLayout? = null
     private var builtFor = ""
@@ -55,6 +52,7 @@ class StatusOverlay(private val ctx: Context) {
     private lateinit var weatherText: TextView
     private lateinit var batteryBadge: LinearLayout
     private lateinit var batteryIcon: IconView
+    private lateinit var boltIcon: IconView
     private lateinit var batteryText: TextView
     private lateinit var clockText: TextView
 
@@ -69,6 +67,10 @@ class StatusOverlay(private val ctx: Context) {
     }
 
     private fun dp(v: Int) = (v * density).toInt()
+    private fun dp(v: Float) = (v * density).toInt()
+
+    private fun load(key: String): JSONObject? =
+        prefs.getString(key, null)?.let { runCatching { JSONObject(it) }.getOrNull() }
 
     fun start() {
         main.removeCallbacks(ticker)
@@ -93,9 +95,15 @@ class StatusOverlay(private val ctx: Context) {
             config = it
             prefs.edit().putString("config", it.toString()).apply()
         }
-        battery = j.optJSONObject("battery")
-        weather = j.optJSONObject("weather")
-        lastPhone = System.currentTimeMillis()
+        // Keep the last known values: a message without battery/weather (e.g. a failed weather fetch) doesn't clear them.
+        j.optJSONObject("battery")?.let {
+            battery = it
+            prefs.edit().putString("battery", it.toString()).apply()
+        }
+        j.optJSONObject("weather")?.let {
+            weather = it
+            prefs.edit().putString("weather", it.toString()).apply()
+        }
         render()
     }
 
@@ -108,7 +116,8 @@ class StatusOverlay(private val ctx: Context) {
             detach()
             return
         }
-        val key = listOf("corner", "sizeSp", "marginDp", "bgColor", "textColor").joinToString("|") { config.opt(it)?.toString().orEmpty() }
+        val key = listOf("corner", "sizeSp", "marginDp", "bgColor", "textColor", "gapDp", "clockSp", "clockBold", "weatherStyle", "batteryStyle")
+            .joinToString("|") { config.opt(it)?.toString().orEmpty() }
         if (row == null || key != builtFor) {
             detach()
             if (runCatching { build() }.isFailure) {
@@ -119,9 +128,7 @@ class StatusOverlay(private val ctx: Context) {
         }
         val r = row ?: return
 
-        val fresh = System.currentTimeMillis() - lastPhone < STALE_MS
-
-        val w = weather?.takeIf { fresh && showWeather }
+        val w = weather?.takeIf { showWeather }
         weatherBadge.visibility = if (w != null) View.VISIBLE else View.GONE
         if (w != null) {
             weatherIcon.weather = StatusIcons.weatherFor(w.optInt("code", 3), w.optBoolean("isDay", true))
@@ -129,13 +136,13 @@ class StatusOverlay(private val ctx: Context) {
             weatherText.text = "${w.optInt("temp")}\u00b0"
         }
 
-        val b = battery?.takeIf { fresh && showBattery }
+        val b = battery?.takeIf { showBattery }
         batteryBadge.visibility = if (b != null) View.VISIBLE else View.GONE
         if (b != null) {
             val level = b.optInt("level", 0).coerceIn(0, 100)
             batteryIcon.level = level
-            batteryIcon.charging = b.optBoolean("charging", false)
             batteryIcon.invalidate()
+            boltIcon.visibility = if (b.optBoolean("charging", false)) View.VISIBLE else View.GONE
             batteryText.text = "$level%"
         }
 
@@ -175,59 +182,90 @@ class StatusOverlay(private val ctx: Context) {
         if (Build.VERSION.SDK_INT >= 26) WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
         else WindowManager.LayoutParams.TYPE_PHONE
 
-    private fun label(sizeSp: Float, color: Int) = TextView(ctx).apply {
+    private fun label(sizeSp: Float, color: Int, bold: Boolean) = TextView(ctx).apply {
         setTextSize(TypedValue.COMPLEX_UNIT_SP, sizeSp)
         setTextColor(color)
-        typeface = Typeface.DEFAULT_BOLD
+        typeface = if (bold) Typeface.DEFAULT_BOLD else Typeface.DEFAULT
         maxLines = 1
         includeFontPadding = false
     }
 
-    /** Outlined pill: translucent dark fill, thin crisp border, icon then text, vertically centred. */
-    private fun badge(unit: Float, fill: Int, fg: Int, icon: View, iconW: Int, iconH: Int, text: TextView) =
-        LinearLayout(ctx).apply {
+    /** One badge's look as set on the phone. Older phone versions don't send it, so everything has a default. */
+    private class Style(j: JSONObject?, defIconDp: Int, fallbackBg: Int) {
+        val textSp = (j?.optInt("textSp", 16) ?: 16).coerceIn(4, 120).toFloat()
+        val bold = j?.optBoolean("bold", true) ?: true
+        val iconDp = (j?.optInt("iconDp", defIconDp) ?: defIconDp).coerceIn(4, 160)
+        val heightDp = (j?.optInt("heightDp", 34) ?: 34).coerceIn(8, 200)
+        val paddingDp = (j?.optInt("paddingDp", 10) ?: 10).coerceIn(0, 100)
+        val borderTenths = (j?.optInt("borderTenths", 14) ?: 14).coerceIn(0, 200)
+        val radiusPct = (j?.optInt("radiusPct", 100) ?: 100).coerceIn(0, 100)
+        val bgColor = j?.optInt("bgColor", fallbackBg) ?: fallbackBg
+    }
+
+    /** Badge: translucent fill, optional border, icon(s) then text, vertically centred. */
+    private fun badge(st: Style, fg: Int, icons: List<Pair<View, LinearLayout.LayoutParams>>, text: TextView): LinearLayout {
+        val heightPx = dp(st.heightDp)
+        return LinearLayout(ctx).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
-            setPadding((unit * 0.55f).toInt(), 0, (unit * 0.65f).toInt(), 0)
+            val pad = dp(st.paddingDp)
+            setPadding(pad, 0, pad, 0)
             background = GradientDrawable().apply {
-                setColor(fill)
-                cornerRadius = 1000f // clamped to half the height -> pill
-                setStroke((unit * 0.075f).roundToInt().coerceAtLeast(1), fg)
+                setColor(st.bgColor)
+                cornerRadius = heightPx / 2f * st.radiusPct / 100f
+                if (st.borderTenths > 0) setStroke((st.borderTenths * density / 10f).roundToInt().coerceAtLeast(1), fg)
             }
-            addView(icon, LinearLayout.LayoutParams(iconW, iconH).apply { marginEnd = (unit * 0.35f).toInt() })
-            addView(text)
+            icons.forEach { (v, lp) -> addView(v, lp) }
+            addView(text, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
+                marginStart = dp(st.iconDp * 0.3f)
+            })
         }
+    }
 
     private fun build() {
-        val size = config.optInt("sizeSp", 18).coerceIn(8, 60).toFloat()
-        val unit = size * density
         val fg = config.optInt("textColor", Color.WHITE)
-        val fill = config.optInt("bgColor", 0x99000000.toInt())
+        val fallbackBg = config.optInt("bgColor", 0x99000000.toInt())
         val c = corner
         val isRight = c.endsWith("RIGHT")
-        badgeGap = (unit * 0.4f).toInt()
-        clockGap = (unit * 0.7f).toInt()
+        val gap = config.optInt("gapDp", 8).coerceIn(0, 100)
+        badgeGap = dp(gap)
+        clockGap = dp(gap * 1.6f)
 
-        weatherIcon = IconView(ctx, fg, battery = false)
-        weatherText = label(size * 0.9f, fg)
-        val weatherSide = (unit * 1.15f).toInt()
-        weatherBadge = badge(unit, fill, fg, weatherIcon, weatherSide, weatherSide, weatherText)
+        val ws = Style(config.optJSONObject("weatherStyle"), 21, fallbackBg)
+        weatherIcon = IconView(ctx, fg, IconView.Kind.WEATHER)
+        weatherText = label(ws.textSp, fg, ws.bold)
+        val wSide = dp(ws.iconDp)
+        weatherBadge = badge(ws, fg, listOf(weatherIcon to LinearLayout.LayoutParams(wSide, wSide)), weatherText)
 
-        batteryIcon = IconView(ctx, fg, battery = true)
-        batteryText = label(size * 0.9f, fg)
-        batteryBadge = badge(unit, fill, fg, batteryIcon, (unit * 1.2f).toInt(), (unit * 0.62f).toInt(), batteryText)
+        // Upright battery with the charging bolt to its right (hidden when not charging).
+        val bs = Style(config.optJSONObject("batteryStyle"), 20, fallbackBg)
+        val ih = bs.iconDp.toFloat()
+        batteryIcon = IconView(ctx, fg, IconView.Kind.BATTERY)
+        boltIcon = IconView(ctx, fg, IconView.Kind.BOLT).apply { visibility = View.GONE }
+        batteryText = label(bs.textSp, fg, bs.bold)
+        batteryBadge = badge(
+            bs, fg,
+            listOf(
+                batteryIcon to LinearLayout.LayoutParams(dp(ih * 0.55f), dp(ih)),
+                boltIcon to LinearLayout.LayoutParams(dp(ih * 0.42f), dp(ih * 0.72f)).apply { marginStart = dp(ih * 0.12f) },
+            ),
+            batteryText
+        )
 
-        clockText = label(size * 1.15f, fg)
+        clockText = label(config.optInt("clockSp", 21).coerceIn(4, 160).toFloat(), fg, config.optBoolean("clockBold", true))
 
         val r = LinearLayout(ctx).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
         }
-        val badgeH = (unit * 1.85f).toInt()
         // The clock is always the item closest to the corner; weather stays left of the battery.
         val items = if (isRight) listOf(weatherBadge, batteryBadge, clockText) else listOf(clockText, weatherBadge, batteryBadge)
         items.forEach { v ->
-            val h = if (v === clockText) ViewGroup.LayoutParams.WRAP_CONTENT else badgeH
+            val h = when (v) {
+                weatherBadge -> dp(ws.heightDp)
+                batteryBadge -> dp(bs.heightDp)
+                else -> ViewGroup.LayoutParams.WRAP_CONTENT
+            }
             r.addView(v, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, h))
         }
 
@@ -256,21 +294,24 @@ class StatusOverlay(private val ctx: Context) {
         builtFor = ""
     }
 
-    private class IconView(ctx: Context, private val color: Int, private val battery: Boolean) : View(ctx) {
+    private class IconView(ctx: Context, private val color: Int, private val kind: Kind) : View(ctx) {
+        enum class Kind { WEATHER, BATTERY, BOLT }
+
         var weather = StatusIcons.Weather.CLOUDY
         var level = 0
-        var charging = false
 
         override fun onDraw(canvas: Canvas) {
             super.onDraw(canvas)
             val w = width.toFloat()
             val h = height.toFloat()
             if (w <= 0f || h <= 0f) return
-            if (battery) {
-                StatusIcons.drawBattery(canvas, 0f, 0f, w, h, level, charging, color)
-            } else {
-                val side = minOf(w, h)
-                StatusIcons.drawWeather(canvas, weather, (w - side) / 2, (h - side) / 2, side, color)
+            when (kind) {
+                Kind.BATTERY -> StatusIcons.drawBattery(canvas, 0f, 0f, w, h, level, color)
+                Kind.BOLT -> StatusIcons.drawBolt(canvas, 0f, 0f, w, h, color)
+                Kind.WEATHER -> {
+                    val side = minOf(w, h)
+                    StatusIcons.drawWeather(canvas, weather, (w - side) / 2, (h - side) / 2, side, color)
+                }
             }
         }
     }
