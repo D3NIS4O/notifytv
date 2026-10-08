@@ -29,8 +29,8 @@ import org.json.JSONObject
 
 class OverlayManager(
     private val ctx: Context,
-    /** Extra distance from the top/bottom edge to keep free in a corner (used by the clock pill). */
-    private val reserved: (String) -> Int = { 0 }
+    /** Called with true when the first popup appears and false once the last one has gone (hides the clock row). */
+    private val onActive: (Boolean) -> Unit = {}
 ) {
     companion object {
         private const val MAX_PER_CORNER = 4
@@ -114,6 +114,7 @@ class OverlayManager(
 
     private fun ensureRoot(): FrameLayout {
         root?.let { return it }
+        onActive(true)
         val r = FrameLayout(ctx).apply {
             clipChildren = false
             clipToPadding = false
@@ -155,7 +156,7 @@ class OverlayManager(
         val horizontal = if (s.isRight) Gravity.END else Gravity.START
         val lp = FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT, vertical or horizontal)
         val h = dp(s.marginDp)
-        val v = maxOf((dp(s.marginDp) - dp(6)).coerceAtLeast(0), reserved(s.corner))
+        val v = (dp(s.marginDp) - dp(6)).coerceAtLeast(0)
         lp.setMargins(h, v, h, v)
         stack.layoutParams = lp
         return stack
@@ -225,6 +226,7 @@ class OverlayManager(
         root?.let { runCatching { wm.removeView(it) } }
         root = null
         stacks.clear()
+        onActive(false)
     }
 
     private fun text(value: String, sizeSp: Float, color: Int, bold: Boolean = false, alpha: Float = 1f, lines: Int = 1) =

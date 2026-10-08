@@ -9,6 +9,7 @@ Optional always-on **clock, phone battery and weather** pill on the TV (phone ap
 pick any of the 4 corners, 12/24h and your city. Weather comes from [Open-Meteo](https://open-meteo.com) (no API key).
 The weather and battery badges are styled separately: font size, bold, icon size, height, padding, corner roundness,
 border weight and background opacity. The last known battery/weather stays on the TV until the phone sends a newer value.
+The row hides while a notification popup is on screen and comes back when it is gone.
 
 APKs are built by GitHub Actions on every push and attached to a Release (see the Releases page).
 

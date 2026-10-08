@@ -44,6 +44,7 @@ class StatusOverlay(private val ctx: Context) {
     private var weather: JSONObject? = load("weather")
 
     private var row: LinearLayout? = null
+    private var suppressed = false
     private var builtFor = ""
     private var badgeGap = 0
     private var clockGap = 0
@@ -82,12 +83,14 @@ class StatusOverlay(private val ctx: Context) {
         detach()
     }
 
-    /** Distance from the top/bottom edge that notifications in [c] should keep so they don't cover the row. */
-    fun reservedPx(c: String): Int {
-        val r = row ?: return 0
-        if (c != corner || r.visibility != View.VISIBLE) return 0
-        val h = if (r.height > 0) r.height else dp(40)
-        return dp(config.optInt("marginDp", 32).coerceIn(0, 300)) + h + dp(6)
+    /** Hides the row (quick fade) while a notification popup is on screen, and brings it back afterwards. */
+    fun setSuppressed(on: Boolean) {
+        if (suppressed == on) return
+        suppressed = on
+        row?.let { r ->
+            r.animate().cancel()
+            r.animate().alpha(if (on) 0f else 1f).setDuration(if (on) 150L else 250L).start()
+        }
     }
 
     fun update(j: JSONObject) {
@@ -284,6 +287,7 @@ class StatusOverlay(private val ctx: Context) {
             x = margin
             y = margin
         }
+        r.alpha = if (suppressed) 0f else 1f
         wm.addView(r, lp)
         row = r
     }

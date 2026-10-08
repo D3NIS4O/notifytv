@@ -143,7 +143,7 @@ fun StatusScreen(settings: StatusSettings, onChange: (StatusSettings) -> Unit, o
                 Section("General") {
                     SwitchRow("Show on TV", s.enabled) { onChange(s.copy(enabled = it)) }
                     Text(
-                        "Stays on screen on top of whatever is playing. Notifications in the same corner appear next to it instead of covering it.",
+                        "Stays on screen on top of whatever is playing and hides while a notification popup is showing.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(bottom = 4.dp)

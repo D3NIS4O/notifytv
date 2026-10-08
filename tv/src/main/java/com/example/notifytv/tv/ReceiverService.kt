@@ -28,8 +28,8 @@ class ReceiverService : Service() {
     override fun onCreate() {
         super.onCreate()
         status = StatusOverlay(this)
-        // Notifications in the same corner as the clock pill are pushed past it.
-        overlay = OverlayManager(this) { corner -> status.reservedPx(corner) }
+        // While a notification popup is on screen the clock/battery/weather row is hidden.
+        overlay = OverlayManager(this) { active -> status.setSuppressed(active) }
         status.start()
         goForeground()
         thread(name = "notifytv-server") { runServer() }
