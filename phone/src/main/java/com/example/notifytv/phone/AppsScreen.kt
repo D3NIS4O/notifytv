@@ -56,14 +56,14 @@ fun AppsScreen(
     var onlySelected by rememberSaveable { mutableStateOf(false) }
     var showSystem by rememberSaveable { mutableStateOf(false) }
     val shown = remember(apps, query, onlySelected, showSystem, enabled) {
-        apps.orEmpty().filter { a ->
+        apps?.filter { a ->
             (query.isBlank() || a.label.contains(query, ignoreCase = true) || a.pkg.contains(query, ignoreCase = true)) &&
                 (!onlySelected || a.pkg in enabled) &&
                 (showSystem || !a.system || a.pkg in enabled)
         }
     }
-    // Acts on the apps currently listed (search + filters), so e.g. "System apps" + "Select all" picks every app.
-    val allShownOn = shown.isNotEmpty() && shown.all { it.pkg in enabled }
+    // "Select all" acts on the apps currently listed (so it respects the search and the filters).
+    val allOn = !shown.isNullOrEmpty() && shown.all { it.pkg in enabled }
 
     Scaffold(
         topBar = {
@@ -80,8 +80,10 @@ fun AppsScreen(
                 },
                 navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back") } },
                 actions = {
-                    TextButton(onClick = { onSetAll(shown.map { it.pkg }, !allShownOn) }, enabled = shown.isNotEmpty()) {
-                        Text(if (allShownOn) "Deselect all" else "Select all")
+                    if (!shown.isNullOrEmpty()) {
+                        TextButton(onClick = { onSetAll(shown.map { it.pkg }, !allOn) }) {
+                            Text(if (allOn) "Select none" else "Select all")
+                        }
                     }
                 }
             )
@@ -107,7 +109,7 @@ fun AppsScreen(
                 FilterChip(selected = showSystem, onClick = { showSystem = !showSystem }, label = { Text("System apps") })
             }
 
-            if (apps == null) {
+            if (shown == null) {
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
             } else {
                 if (shown.isEmpty()) {
