@@ -29,6 +29,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -44,9 +45,25 @@ import androidx.compose.ui.unit.dp
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun AppsScreen(apps: List<AppItem>?, enabled: Set<String>, onToggle: (String, Boolean) -> Unit, onBack: () -> Unit) {
+fun AppsScreen(
+    apps: List<AppItem>?,
+    enabled: Set<String>,
+    onToggle: (String, Boolean) -> Unit,
+    onSetAll: (Collection<String>, Boolean) -> Unit,
+    onBack: () -> Unit
+) {
     var query by rememberSaveable { mutableStateOf("") }
     var onlySelected by rememberSaveable { mutableStateOf(false) }
+    var showSystem by rememberSaveable { mutableStateOf(false) }
+    val shown = remember(apps, query, onlySelected, showSystem, enabled) {
+        apps.orEmpty().filter { a ->
+            (query.isBlank() || a.label.contains(query, ignoreCase = true) || a.pkg.contains(query, ignoreCase = true)) &&
+                (!onlySelected || a.pkg in enabled) &&
+                (showSystem || !a.system || a.pkg in enabled)
+        }
+    }
+    // Acts on the apps currently listed (search + filters), so e.g. "System apps" + "Select all" picks every app.
+    val allShownOn = shown.isNotEmpty() && shown.all { it.pkg in enabled }
 
     Scaffold(
         topBar = {
@@ -61,7 +78,12 @@ fun AppsScreen(apps: List<AppItem>?, enabled: Set<String>, onToggle: (String, Bo
                         )
                     }
                 },
-                navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back") } }
+                navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back") } },
+                actions = {
+                    TextButton(onClick = { onSetAll(shown.map { it.pkg }, !allShownOn) }, enabled = shown.isNotEmpty()) {
+                        Text(if (allShownOn) "Deselect all" else "Select all")
+                    }
+                }
             )
         }
     ) { pad ->
@@ -81,17 +103,13 @@ fun AppsScreen(apps: List<AppItem>?, enabled: Set<String>, onToggle: (String, Bo
             Row(Modifier.padding(horizontal = 16.dp, vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 FilterChip(selected = !onlySelected, onClick = { onlySelected = false }, label = { Text("All apps") })
                 FilterChip(selected = onlySelected, onClick = { onlySelected = true }, label = { Text("Selected") })
+                // System apps (e.g. System UI, which posts screenshot notifications) have no launcher icon.
+                FilterChip(selected = showSystem, onClick = { showSystem = !showSystem }, label = { Text("System apps") })
             }
 
             if (apps == null) {
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
             } else {
-                val shown = remember(apps, query, onlySelected, enabled) {
-                    apps.filter { a ->
-                        (query.isBlank() || a.label.contains(query, ignoreCase = true) || a.pkg.contains(query, ignoreCase = true)) &&
-                            (!onlySelected || a.pkg in enabled)
-                    }
-                }
                 if (shown.isEmpty()) {
                     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                         Text(
@@ -107,7 +125,10 @@ fun AppsScreen(apps: List<AppItem>?, enabled: Set<String>, onToggle: (String, Bo
                                 modifier = Modifier.clickable { onToggle(app.pkg, !on) },
                                 headlineContent = { Text(app.label, maxLines = 1, overflow = TextOverflow.Ellipsis) },
                                 supportingContent = {
-                                    Text(app.pkg, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodySmall)
+                                    Text(
+                                        if (app.system) "System \u00b7 ${app.pkg}" else app.pkg,
+                                        maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodySmall
+                                    )
                                 },
                                 leadingContent = { Image(app.icon, contentDescription = null, modifier = Modifier.size(40.dp)) },
                                 trailingContent = { Switch(checked = on, onCheckedChange = { onToggle(app.pkg, it) }) },

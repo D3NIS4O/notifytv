@@ -32,7 +32,8 @@ import androidx.core.graphics.drawable.toBitmap
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
-data class AppItem(val pkg: String, val label: String, val icon: ImageBitmap)
+/** [system] = no launcher icon (System UI, Phone services, etc.); hidden in the app list unless "System apps" is on. */
+data class AppItem(val pkg: String, val label: String, val icon: ImageBitmap, val system: Boolean = false)
 
 enum class Screen { HOME, STYLE, STATUS, APPS }
 
@@ -57,14 +58,30 @@ class MainActivity : ComponentActivity() {
     }
 }
 
+/**
+ * Every installed app: normal (launchable) apps plus system apps without a launcher icon, such as System UI,
+ * which posts e.g. the "Screenshot saved" notification on many phones.
+ */
 fun loadApps(c: Context): List<AppItem> {
     val pm = c.packageManager
     val intent = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER)
-    return pm.queryIntentActivities(intent, 0)
-        .map { it.activityInfo.applicationInfo }
+    val launchable = pm.queryIntentActivities(intent, 0).map { it.activityInfo.packageName }.toSet()
+    @Suppress("DEPRECATION")
+    val all = runCatching { pm.getInstalledApplications(0) }.getOrDefault(emptyList())
+    val launcherInfos = pm.queryIntentActivities(intent, 0).map { it.activityInfo.applicationInfo }
+    return (all + launcherInfos)
         .distinctBy { it.packageName }
         .filter { it.packageName != c.packageName }
-        .map { AppItem(it.packageName, pm.getApplicationLabel(it).toString(), pm.getApplicationIcon(it).toBitmap(96, 96).asImageBitmap()) }
+        .mapNotNull { info ->
+            runCatching {
+                AppItem(
+                    pkg = info.packageName,
+                    label = pm.getApplicationLabel(info).toString(),
+                    icon = pm.getApplicationIcon(info).toBitmap(96, 96).asImageBitmap(),
+                    system = info.packageName !in launchable,
+                )
+            }.getOrNull()
+        }
         .sortedBy { it.label.lowercase() }
 }
 
@@ -117,6 +134,10 @@ fun App(resumeTick: Int) {
                 enabled = enabledApps,
                 onToggle = { pkg, on ->
                     enabledApps = if (on) enabledApps + pkg else enabledApps - pkg
+                    Prefs.setEnabledApps(ctx, enabledApps)
+                },
+                onSetAll = { pkgs, on ->
+                    enabledApps = if (on) enabledApps + pkgs else enabledApps - pkgs.toSet()
                     Prefs.setEnabledApps(ctx, enabledApps)
                 },
                 onBack = { screen = Screen.HOME }
