@@ -94,44 +94,51 @@ object StatusIcons {
     }
 
     /**
-     * Horizontal battery outline in ([x], [y], [w], [h]) with the terminal on the right.
-     * Shows a lightning bolt while charging, otherwise a fill for the level.
+     * Upright battery outline in ([x], [y], [w], [h]): terminal on top, fill rising from the bottom with [level].
+     * The charging bolt is drawn separately with [drawBolt], next to the battery instead of inside it.
      */
-    fun drawBattery(c: Canvas, x: Float, y: Float, w: Float, h: Float, level: Int, charging: Boolean, color: Int) {
-        val stroke = (h * 0.11f).coerceAtLeast(1.5f)
-        val cap = w * 0.09f
-        val bodyRight = x + w - cap
-        val r = h * 0.24f
+    fun drawBattery(c: Canvas, x: Float, y: Float, w: Float, h: Float, level: Int, color: Int) {
+        val stroke = (w * 0.13f).coerceAtLeast(1.5f)
+        val capH = h * 0.11f
+        val capW = w * 0.46f
+        val top = y + capH
+        val r = w * 0.2f
         paint.color = color
+
+        paint.style = Paint.Style.FILL
+        rect.set(x + (w - capW) / 2, y, x + (w + capW) / 2, top + stroke / 2)
+        c.drawRoundRect(rect, capW * 0.25f, capW * 0.25f, paint)
 
         paint.style = Paint.Style.STROKE
         paint.strokeWidth = stroke
-        rect.set(x + stroke / 2, y + stroke / 2, bodyRight - stroke / 2, y + h - stroke / 2)
+        rect.set(x + stroke / 2, top + stroke / 2, x + w - stroke / 2, y + h - stroke / 2)
         c.drawRoundRect(rect, r, r, paint)
 
-        paint.style = Paint.Style.FILL
-        rect.set(bodyRight + stroke * 0.3f, y + h * 0.32f, x + w, y + h * 0.68f)
-        c.drawRoundRect(rect, cap * 0.4f, cap * 0.4f, paint)
-
-        if (charging) {
-            val cx = x + (bodyRight - x) / 2
-            val cy = y + h / 2
-            val b = h * 0.64f
-            path.reset()
-            path.moveTo(cx + b * 0.12f, cy - b / 2)
-            path.lineTo(cx - b * 0.32f, cy + b * 0.08f)
-            path.lineTo(cx - b * 0.02f, cy + b * 0.08f)
-            path.lineTo(cx - b * 0.12f, cy + b / 2)
-            path.lineTo(cx + b * 0.32f, cy - b * 0.08f)
-            path.lineTo(cx + b * 0.02f, cy - b * 0.08f)
-            path.close()
-            c.drawPath(path, paint)
-        } else {
-            val inset = stroke * 2f
-            val full = bodyRight - x - inset * 2
-            rect.set(x + inset, y + inset, x + inset + full * level.coerceIn(0, 100) / 100f, y + h - inset)
-            c.drawRoundRect(rect, r * 0.5f, r * 0.5f, paint)
+        val lv = level.coerceIn(0, 100)
+        if (lv > 0) {
+            paint.style = Paint.Style.FILL
+            val inset = stroke * 1.9f
+            val innerTop = top + inset
+            val innerBottom = y + h - inset
+            val fillTop = innerBottom - (innerBottom - innerTop) * lv / 100f
+            rect.set(x + inset, fillTop, x + w - inset, innerBottom)
+            c.drawRoundRect(rect, r * 0.35f, r * 0.35f, paint)
         }
+    }
+
+    /** Filled lightning bolt inside ([x], [y], [w], [h]); shown to the right of the battery while charging. */
+    fun drawBolt(c: Canvas, x: Float, y: Float, w: Float, h: Float, color: Int) {
+        paint.color = color
+        paint.style = Paint.Style.FILL
+        path.reset()
+        path.moveTo(x + w * 0.68f, y)
+        path.lineTo(x + w * 0.05f, y + h * 0.57f)
+        path.lineTo(x + w * 0.47f, y + h * 0.57f)
+        path.lineTo(x + w * 0.32f, y + h)
+        path.lineTo(x + w * 0.95f, y + h * 0.43f)
+        path.lineTo(x + w * 0.53f, y + h * 0.43f)
+        path.close()
+        c.drawPath(path, paint)
     }
 
     /** Cloud spanning x 3.5..20.5, y 5..17 on the 24 grid, moved by ([dx], [dy]). */

@@ -43,6 +43,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -201,10 +202,23 @@ fun StatusScreen(settings: StatusSettings, onChange: (StatusSettings) -> Unit, o
                     }
                 }
 
-                Section("Look") {
-                    SliderRow("Size", s.sizeSp, 12..40, unit = " sp") { onChange(s.copy(sizeSp = it)) }
+                Section("Layout") {
                     SliderRow("Distance from edge", s.marginDp, 0..120, step = 2, unit = " dp") { onChange(s.copy(marginDp = it)) }
-                    SliderRow("Background opacity", s.opacity, 0..100, step = 5, unit = " %") { onChange(s.copy(opacity = it)) }
+                    SliderRow("Space between items", s.gapDp, 0..40, unit = " dp") { onChange(s.copy(gapDp = it)) }
+                }
+
+                if (s.showClock) {
+                    Section("Clock") {
+                        SliderRow("Font size", s.clockSp, 8..60, unit = " sp") { onChange(s.copy(clockSp = it)) }
+                        SwitchRow("Bold", s.clockBold) { onChange(s.copy(clockBold = it)) }
+                    }
+                }
+
+                if (s.showWeather) {
+                    BadgeStyleSection("Weather badge", s.weatherStyle, BadgeStyle.WEATHER) { onChange(latest.copy(weatherStyle = it)) }
+                }
+                if (s.showBattery) {
+                    BadgeStyleSection("Battery badge", s.batteryStyle, BadgeStyle.BATTERY) { onChange(latest.copy(batteryStyle = it)) }
                 }
                 Spacer(Modifier.height(16.dp))
             }
@@ -261,12 +275,32 @@ private fun StatusPreview(s: StatusSettings, weather: Weather.Now?, onCorner: (C
     }
 }
 
+/** Sliders for one badge's look; the same controls are used for weather and battery. */
+@Composable
+private fun BadgeStyleSection(title: String, st: BadgeStyle, defaults: BadgeStyle, onChange: (BadgeStyle) -> Unit) {
+    Section(title) {
+        SliderRow("Font size", st.textSp, 6..48, unit = " sp") { onChange(st.copy(textSp = it)) }
+        SwitchRow("Bold text", st.bold) { onChange(st.copy(bold = it)) }
+        SliderRow("Icon size", st.iconDp, 8..60, unit = " dp") { onChange(st.copy(iconDp = it)) }
+        SliderRow("Height", st.heightDp, 14..90, unit = " dp") { onChange(st.copy(heightDp = it)) }
+        SliderRow("Side padding", st.paddingDp, 0..40, unit = " dp") { onChange(st.copy(paddingDp = it)) }
+        SliderRow("Corner roundness", st.radiusPct, 0..100, step = 5, unit = " %") { onChange(st.copy(radiusPct = it)) }
+        SliderRow(
+            "Border weight", st.borderTenths, 0..60,
+            format = { if (it == 0) "None" else "%.1f dp".format(it / 10f) }
+        ) { onChange(st.copy(borderTenths = it)) }
+        SliderRow("Background opacity", st.opacity, 0..100, step = 5, unit = " %") { onChange(st.copy(opacity = it)) }
+        TextButton(onClick = { onChange(defaults) }, enabled = st != defaults, modifier = Modifier.align(Alignment.End)) {
+            Text("Reset")
+        }
+    }
+}
+
 /** Mirrors the TV: weather badge, battery badge and the clock, with the clock closest to the chosen corner. */
 @Composable
 private fun StatusPill(
     s: StatusSettings, scale: Float, time: String, level: Int, charging: Boolean, weather: Weather.Now?, modifier: Modifier
 ) {
-    val u = s.sizeSp * scale
     val badges = buildList {
         if (s.showWeather) add("weather")
         if (s.showBattery) add("battery")
@@ -280,43 +314,58 @@ private fun StatusPill(
         parts.forEachIndexed { i, p ->
             if (i > 0) {
                 val nearClock = p == "clock" || parts[i - 1] == "clock"
-                Spacer(Modifier.width((u * if (nearClock) 0.7f else 0.4f).dp))
+                Spacer(Modifier.width((s.gapDp * scale * if (nearClock) 1.6f else 1f).dp))
             }
             when (p) {
-                "weather" -> Badge(u, s.opacity) {
-                    val kind = weather?.let { StatusIcons.weatherFor(it.code, it.isDay) } ?: StatusIcons.Weather.CLOUDY
-                    WeatherIcon(kind, Modifier.size((u * 1.15f).dp))
-                    Spacer(Modifier.width((u * 0.35f).dp))
-                    BadgeText(if (weather != null) "${weather.rounded}\u00b0" else "\u2014\u00b0", u * 0.9f)
+                "weather" -> {
+                    val st = s.weatherStyle
+                    Badge(st, scale) {
+                        val kind = weather?.let { StatusIcons.weatherFor(it.code, it.isDay) } ?: StatusIcons.Weather.CLOUDY
+                        WeatherIcon(kind, Modifier.size((st.iconDp * scale).dp))
+                        Spacer(Modifier.width((st.iconDp * 0.3f * scale).dp))
+                        BadgeText(if (weather != null) "${weather.rounded}\u00b0" else "\u2014\u00b0", st.textSp * scale, st.bold)
+                    }
                 }
-                "battery" -> Badge(u, s.opacity) {
-                    BatteryIcon(level, charging, Modifier.size(width = (u * 1.2f).dp, height = (u * 0.62f).dp))
-                    Spacer(Modifier.width((u * 0.35f).dp))
-                    BadgeText("$level%", u * 0.9f)
+                "battery" -> {
+                    val st = s.batteryStyle
+                    Badge(st, scale) {
+                        val ih = st.iconDp * scale
+                        BatteryIcon(level, Modifier.size(width = (ih * 0.55f).dp, height = ih.dp))
+                        if (charging) {
+                            Spacer(Modifier.width((ih * 0.12f).dp))
+                            BoltIcon(Modifier.size(width = (ih * 0.42f).dp, height = (ih * 0.72f).dp))
+                        }
+                        Spacer(Modifier.width((st.iconDp * 0.3f * scale).dp))
+                        BadgeText("$level%", st.textSp * scale, st.bold)
+                    }
                 }
-                else -> BadgeText(time, u * 1.15f)
+                else -> BadgeText(time, s.clockSp * scale, s.clockBold)
             }
         }
     }
 }
 
 @Composable
-private fun Badge(u: Float, opacity: Int, content: @Composable RowScope.() -> Unit) {
-    val shape = RoundedCornerShape(percent = 50)
+private fun Badge(st: BadgeStyle, scale: Float, content: @Composable RowScope.() -> Unit) {
+    // RoundedCornerShape's percent is of the shorter side, so 50 % = full pill.
+    val shape = RoundedCornerShape(percent = st.radiusPct.coerceIn(0, 100) / 2)
+    var m = Modifier.height((st.heightDp * scale).dp)
+        .clip(shape)
+        .background(Color.Black.copy(alpha = st.opacity.coerceIn(0, 100) / 100f))
+    if (st.borderTenths > 0) m = m.border((st.borderTenths / 10f * scale).coerceAtLeast(0.4f).dp, Color.White, shape)
     Row(
-        Modifier.height((u * 1.85f).dp)
-            .clip(shape)
-            .background(Color.Black.copy(alpha = opacity / 100f))
-            .border((u * 0.075f).coerceAtLeast(0.6f).dp, Color.White, shape)
-            .padding(start = (u * 0.55f).dp, end = (u * 0.65f).dp),
+        m.padding(horizontal = (st.paddingDp * scale).dp),
         verticalAlignment = Alignment.CenterVertically,
         content = content
     )
 }
 
 @Composable
-private fun BadgeText(text: String, sizeDp: Float) {
-    Text(text, color = Color.White, fontSize = sizeDp.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+private fun BadgeText(text: String, sizeDp: Float, bold: Boolean) {
+    Text(
+        text, color = Color.White, fontSize = sizeDp.sp,
+        fontWeight = if (bold) FontWeight.Bold else FontWeight.Normal, maxLines = 1
+    )
 }
 
 @Composable
@@ -329,11 +378,19 @@ private fun WeatherIcon(kind: StatusIcons.Weather, modifier: Modifier) {
 }
 
 @Composable
-private fun BatteryIcon(level: Int, charging: Boolean, modifier: Modifier) {
+private fun BatteryIcon(level: Int, modifier: Modifier) {
     Canvas(modifier) {
         drawIntoCanvas {
-            StatusIcons.drawBattery(it.nativeCanvas, 0f, 0f, size.width, size.height, level, charging, android.graphics.Color.WHITE)
+            StatusIcons.drawBattery(it.nativeCanvas, 0f, 0f, size.width, size.height, level, android.graphics.Color.WHITE)
         }
     }
 }
 
+@Composable
+private fun BoltIcon(modifier: Modifier) {
+    Canvas(modifier) {
+        drawIntoCanvas {
+            StatusIcons.drawBolt(it.nativeCanvas, 0f, 0f, size.width, size.height, android.graphics.Color.WHITE)
+        }
+    }
+}

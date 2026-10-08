@@ -49,11 +49,19 @@ fun Section(title: String, content: @Composable ColumnScope.() -> Unit) {
 }
 
 @Composable
-fun SliderRow(label: String, value: Int, range: IntRange, step: Int = 1, unit: String = "", onChange: (Int) -> Unit) {
+fun SliderRow(
+    label: String,
+    value: Int,
+    range: IntRange,
+    step: Int = 1,
+    unit: String = "",
+    format: ((Int) -> String)? = null,
+    onChange: (Int) -> Unit
+) {
     Column(Modifier.fillMaxWidth().padding(vertical = 2.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(label, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
-            Text("$value$unit", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
+            Text(format?.invoke(value) ?: "$value$unit", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
         }
         Slider(
             value = value.toFloat().coerceIn(range.first.toFloat(), range.last.toFloat()),
