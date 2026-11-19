@@ -35,7 +35,7 @@ object StatusReporter {
         val ctx = c.applicationContext
         val on = Prefs.status(ctx).enabled
         if (on && loop == null) {
-            loop = exec.scheduleWithFixedDelay(Runnable { runCatching { push(ctx, discover = false) } }, EVERY_SEC, EVERY_SEC, TimeUnit.SECONDS)
+            loop = exec.scheduleWithFixedDelay(Runnable { runCatching { push(ctx, discover = true) } }, EVERY_SEC, EVERY_SEC, TimeUnit.SECONDS)
         } else if (!on) {
             loop?.cancel(false)
             loop = null

@@ -86,7 +86,7 @@ fun HomeScreen(
         NotificationManagerCompat.getEnabledListenerPackages(ctx).contains(ctx.packageName)
     }
 
-    // Connects automatically: tries the saved TV, otherwise searches 192.168.0.101-109.
+    // Connects automatically: tries the saved TV, otherwise searches 192.168.0.100-110.
     LaunchedEffect(resumeTick) {
         conn = Conn.CHECKING
         TvSender.ping(ctx) { ok ->
@@ -226,7 +226,7 @@ private fun ConnectionCard(host: String?, conn: Conn, onScan: () -> Unit, onTest
                         Text(title, style = MaterialTheme.typography.titleMedium)
                     }
                     Text(
-                        host ?: "Open NotifyTV on your TV. It's found automatically at 192.168.0.101–109, or scan its QR code.",
+                        host ?: "Open NotifyTV on your TV. It's found automatically at 192.168.0.100–110, or scan its QR code.",
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )

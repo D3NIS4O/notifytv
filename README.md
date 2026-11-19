@@ -16,4 +16,4 @@ APKs are built by GitHub Actions on every push and attached to a Release (see th
 ## Setup
 1. Install `NotifyTV-tv.apk` on the TV, open it. Grant "Display over other apps" (or `adb shell appops set com.example.notifytv.tv SYSTEM_ALERT_WINDOW allow`).
 2. Install `NotifyTV-phone.apk` on the phone. Grant notification access (Android 13+: App info -> menu -> Allow restricted settings first).
-3. Tap **Scan TV QR**, pick apps, done.
+3. Open the phone app once and pick apps. It finds the TV by itself on `192.168.0.100`-`192.168.0.110` (scanning the QR code is only needed if the TV is on another address). After that it reconnects automatically, e.g. when the phone joins WiFi or the TV changes address, without opening the app.

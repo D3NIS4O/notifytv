@@ -3,6 +3,10 @@ package com.example.notifytv.phone
 import android.app.Notification
 import android.graphics.Bitmap
 import android.graphics.drawable.Drawable
+import android.net.ConnectivityManager
+import android.net.Network
+import android.net.NetworkCapabilities
+import android.net.NetworkRequest
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
 import androidx.core.app.NotificationCompat
@@ -11,16 +15,42 @@ import androidx.core.graphics.drawable.toBitmap
 class NotifListener : NotificationListenerService() {
     private var lastKey = ""
     private var lastTime = 0L
+    private var wifiCallback: ConnectivityManager.NetworkCallback? = null
 
     override fun onListenerConnected() {
         super.onListenerConnected()
         // Keeps the TV's clock / battery / weather pill updated in the background.
         StatusReporter.sync(this)
+        watchWifi()
     }
 
     override fun onListenerDisconnected() {
+        unwatchWifi()
         StatusReporter.stop()
         super.onListenerDisconnected()
+    }
+
+    /**
+     * Finds the TV again by itself every time the phone joins WiFi (also fires once right away if it is already on WiFi),
+     * so the app never has to be opened just to connect.
+     */
+    private fun watchWifi() {
+        if (wifiCallback != null) return
+        val cm = getSystemService(ConnectivityManager::class.java) ?: return
+        val appCtx = applicationContext
+        val cb = object : ConnectivityManager.NetworkCallback() {
+            override fun onAvailable(network: Network) {
+                TvSender.ping(appCtx) { ok -> if (ok) StatusReporter.sync(appCtx) }
+            }
+        }
+        val req = NetworkRequest.Builder().addTransportType(NetworkCapabilities.TRANSPORT_WIFI).build()
+        runCatching { cm.registerNetworkCallback(req, cb); wifiCallback = cb }
+    }
+
+    private fun unwatchWifi() {
+        val cb = wifiCallback ?: return
+        wifiCallback = null
+        runCatching { getSystemService(ConnectivityManager::class.java)?.unregisterNetworkCallback(cb) }
     }
 
     override fun onNotificationPosted(sbn: StatusBarNotification) {

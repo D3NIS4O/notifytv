@@ -25,23 +25,28 @@ object TvSender {
     private val main = Handler(Looper.getMainLooper())
 
     /** Addresses that are checked when looking for the TV automatically. */
-    val SCAN_HOSTS = (101..109).map { "192.168.0.$it" }
+    val SCAN_HOSTS = (100..110).map { "192.168.0.$it" }
     private const val PORT = 47321
+
+    /** After a scan finds nothing, automatic retries (notifications, status loop) wait this long before scanning again. */
+    private const val SCAN_COOLDOWN_MS = 20_000L
+    @Volatile private var scanFailedAt = 0L
 
     fun ping(c: Context, onResult: (Boolean) -> Unit) {
         val ctx = c.applicationContext
         exec.execute {
-            val ok = sendOrDiscover(ctx, JSONObject().put("type", "ping").put("token", Prefs.token(ctx)))
+            // force = true: the person opened the app or the phone just joined WiFi, so always scan right away.
+            val ok = sendOrDiscover(ctx, JSONObject().put("type", "ping").put("token", Prefs.token(ctx)), force = true)
             main.post { onResult(ok) }
         }
     }
 
     fun sendTest(c: Context, onResult: ((Boolean) -> Unit)? = null) =
-        sendNotification(c, c.packageName, "Alex", "Hey! Are we still on for tonight? This is how your notifications will look on the TV.", onResult)
+        sendNotification(c, c.packageName, "Alex", "Hey! Are we still on for tonight? This is how your notifications will look on the TV.", onResult, manual = true)
 
     fun sendNotification(
         c: Context, pkg: String, title: String, text: String,
-        onResult: ((Boolean) -> Unit)? = null, photo: Bitmap? = null
+        onResult: ((Boolean) -> Unit)? = null, photo: Bitmap? = null, manual: Boolean = false
     ) {
         val ctx = c.applicationContext
         exec.execute {
@@ -69,7 +74,7 @@ object TvSender {
                 .put("bgColor", st.argb)
                 .put("textColor", st.textColor)
 
-            val ok = sendOrDiscover(ctx, json)
+            val ok = sendOrDiscover(ctx, json, force = manual)
             if (onResult != null) main.post { onResult(ok) }
         }
     }
@@ -106,16 +111,17 @@ object TvSender {
         return out
     }
 
-    /** Sends to the saved TV; if that fails, looks for the TV on 192.168.0.101-109 and tries once more. */
-    private fun sendOrDiscover(c: Context, json: JSONObject): Boolean {
+    /** Sends to the saved TV; if that fails, looks for the TV on 192.168.0.100-110 and tries once more. */
+    private fun sendOrDiscover(c: Context, json: JSONObject, force: Boolean = false): Boolean {
         if (send(c, json)) return true
-        if (!discoverBlocking(c)) return false
+        if (!discoverBlocking(c, force)) return false
         json.put("token", Prefs.token(c))
         return send(c, json)
     }
 
     /** Checks all [SCAN_HOSTS] at the same time and saves the first NotifyTV TV that answers. Blocking. */
-    private fun discoverBlocking(c: Context): Boolean {
+    private fun discoverBlocking(c: Context, force: Boolean): Boolean {
+        if (!force && System.currentTimeMillis() - scanFailedAt < SCAN_COOLDOWN_MS) return false
         val pool = Executors.newFixedThreadPool(SCAN_HOSTS.size)
         try {
             val results = ExecutorCompletionService<Pair<String, String>?>(pool)
@@ -127,6 +133,7 @@ object TvSender {
                     return true
                 }
             }
+            scanFailedAt = System.currentTimeMillis()
             return false
         } finally {
             pool.shutdownNow()
